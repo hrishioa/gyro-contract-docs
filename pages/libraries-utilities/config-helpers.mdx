@@ -1,0 +1,61 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# ConfigHelpers
+
+The `ConfigHelpers` library provides a set of helper functions for interacting with the [IGyroConfig](/igyro-config) contract, which is responsible for storing and managing the global configuration settings of the Gyroscope protocol.
+
+These helpers simplify the process of reading and writing configuration values, making it easier for other contracts to access and update the protocol's settings.
+
+## Getting Configuration Values
+
+The `ConfigHelpers` library offers several functions for retrieving configuration values from the [IGyroConfig](/igyro-config) contract:
+
+- `getUint(IGyroConfig config, bytes32 key)`: Returns the value associated with the given `key` as a `uint256`.
+- `getUint(IGyroConfig config, bytes32 key, uint256 defaultValue)`: Returns the value associated with the given `key`, or the provided `defaultValue` if the key is not found.
+- `getAddress(IGyroConfig config, bytes32 key)`: Returns the address value associated with the given `key`.
+- `getAddress(IGyroConfig config, bytes32 key, address defaultValue)`: Returns the address value associated with the given `key`, or the provided `defaultValue` if the key is not found.
+
+Here's an example of how to use these functions:
+
+<Callout type="info">
+The `IGyroConfig` contract is passed as a parameter to these functions, as they are designed to be used across multiple contracts in the Gyroscope protocol.
+</Callout>
+
+```solidity
+IGyroConfig config = IGyroConfig(0x...); // Address of the IGyroConfig contract
+
+uint256 xuBar = ConfigHelpers.getUint(config, keccak256("xuBar"));
+address motherboard = ConfigHelpers.getAddress(config, keccak256("motherboard"));
+```
+
+## Setting Configuration Values
+
+The `ConfigHelpers` library also provides functions for setting configuration values in the [IGyroConfig](/igyro-config) contract:
+
+- `setUint(IGyroConfig config, bytes32 key, uint256 newValue)`: Sets the value associated with the given `key` to the `newValue`.
+- `setAddress(IGyroConfig config, bytes32 key, address newValue)`: Sets the address value associated with the given `key` to the `newValue`.
+
+Here's an example of how to use these functions:
+
+```solidity
+IGyroConfig config = IGyroConfig(0x...); // Address of the IGyroConfig contract
+
+ConfigHelpers.setUint(config, keccak256("alphaBar"), 0.5e18);
+ConfigHelpers.setAddress(config, keccak256("motherboard"), 0x...); // Address of the motherboard contract
+```
+
+<Callout type="warning">
+Remember that setting configuration values is typically a privileged action, controlled by the Gyroscope protocol's governance. Make sure you have the necessary permissions before calling these functions.
+</Callout>
+
+## Utility Functions
+
+The `ConfigHelpers` library also includes some utility functions to simplify working with the [IGyroConfig](/igyro-config) contract:
+
+- `hasKey(IGyroConfig config, bytes32 key)`: Returns `true` if the given `key` is present in the configuration.
+- `listKeys(IGyroConfig config)`: Returns an array of all the keys currently set in the configuration.
+- `getConfigMeta(IGyroConfig config, bytes32 key)`: Returns the metadata associated with the given `key`, including its data type and whether it's frozen.
+
+These functions can be useful when iterating over the protocol's configuration or checking the status of specific settings.
+
+By using the `ConfigHelpers` library, you can easily interact with the [IGyroConfig](/igyro-config) contract and manage the Gyroscope protocol's global configuration settings from within your contracts. This helps maintain a consistent and organized approach to configuration management across the entire system.

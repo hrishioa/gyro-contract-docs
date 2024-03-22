@@ -1,0 +1,35 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Oracles
+
+The Gyroscope protocol utilizes a robust and multi-layered price oracle system to ensure accurate and up-to-date asset valuations. This system is crucial for the proper functioning of the protocol's core mechanisms, such as [PAMM](/core-contracts/pamm) and [IPAMM](/core-contracts/ipamm), which rely on accurate pricing data to facilitate minting, redeeming, and swapping of the Gyro Dollar (GYD) stablecoin.
+
+The oracle system consists of several key components, each serving a specific purpose:
+
+**CheckedPriceOracle**: This contract is responsible for fetching and validating asset prices, performing various checks to ensure the data is accurate and consistent. It retrieves prices from multiple sources, including trusted price oracles, and applies a series of validation checks to the data.
+
+**IUSDPriceOracle**: This interface defines the contract responsible for providing the USD price of an asset. The [CheckedPriceOracle](/oracles/checked-price-oracle) contract uses this interface to obtain the raw USD prices.
+
+**IRelativePriceOracle**: This interface defines the contract responsible for providing the relative price between a pair of assets. The [CheckedPriceOracle](/oracles/checked-price-oracle) contract uses this interface to ensure the relative prices are consistent with the USD prices.
+
+Together, these oracle components work to provide a comprehensive and reliable pricing system for the Gyroscope protocol. Let's take a closer look at how they function:
+
+<Callout type="info">
+The [CheckedPriceOracle](/oracles/checked-price-oracle), [IUSDPriceOracle](/oracles/iusd-price-oracle), and [IRelativePriceOracle](/oracles/irelative-price-oracle) contracts will be covered in more detail in the following subsections.
+</Callout>
+
+## Layered Oracle Approach
+
+The Gyroscope protocol's oracle system employs a layered approach to price data, combining multiple sources and validation techniques to ensure the integrity of the pricing information used throughout the system.
+
+The first layer consists of trusted price oracles, such as Chainlink, which provide the raw USD prices for the supported assets. These prices are then passed to the [CheckedPriceOracle](/oracles/checked-price-oracle) contract for further validation.
+
+The second layer involves the [IRelativePriceOracle](/oracles/irelative-price-oracle) contract, which provides the relative prices between asset pairs. The [CheckedPriceOracle](/oracles/checked-price-oracle) uses this information to ensure the relative prices are consistent with the USD prices, providing an additional layer of validation.
+
+Finally, the [CheckedPriceOracle](/oracles/checked-price-oracle) contract performs a series of checks and validations on the raw price data, including:
+
+- Verifying the consistency of the relative prices with the USD prices
+- Ensuring the WETH/USD price is grounded and not subject to extreme volatility
+- Checking the validity of the prices provided by the trusted price oracles
+
+This multi-layered approach helps to mitigate the risks associated with relying on a single price source, and ensures that the pricing information used throughout the Gyroscope protocol is as accurate and reliable as possible.

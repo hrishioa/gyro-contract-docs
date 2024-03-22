@@ -1,0 +1,32 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Libraries and Utilities
+
+The Gyroscope protocol makes use of several libraries and utility contracts to provide common functionality across the codebase. These include:
+
+## [EnumerableExtensions](/libraries-utilities/enumerable-extensions)
+## [Flow](/libraries-utilities/flow)
+## [ConfigHelpers](/libraries-utilities/config-helpers)
+## [LogExpMath](/libraries-utilities/logexp-math)
+## [FixedPoint](/libraries-utilities/fixed-point)
+
+Let's dive into the details of these components:
+
+### DecimalScale
+The `DecimalScale` library provides utility functions for easily scaling and converting between different decimal places. This is crucial for working with the various token types and their differing decimal representations within the Gyroscope protocol.
+
+For example, when interacting with the [IGyroVault](/core-contracts/igyro-vault) interface, you'll need to ensure that token amounts are properly scaled to match the vault's decimal places. The `DecimalScale` library makes this easy and helps prevent common errors.
+
+### Errors
+The `Errors` library defines a set of standardized error messages used throughout the Gyroscope contracts. This ensures consistent and informative error reporting, making it easier for developers to debug issues.
+
+When a function in the protocol encounters an error condition, it can simply revert with the appropriate error message from this library. This provides clear feedback to the caller about what went wrong.
+
+### DataTypes
+The `DataTypes` library contains the core data structures used across the Gyroscope protocol. This includes structures like `VaultInfo`, `VaultMetadata`, and `Order`, which are used to represent the state of the protocol's components.
+
+Having these data types centralized in a library makes it easier to maintain consistency and ensure type safety throughout the codebase. It also provides a clear documentation of the protocol's data model for developers working with the system.
+
+The `DataTypes` library is a crucial reference for understanding the internal workings of Gyroscope and how the different components interact with each other.
+
+These libraries and utilities form the foundation upon which the core Gyroscope contracts are built. By providing common functionality and a shared vocabulary, they help ensure the protocol's codebase is maintainable, extensible, and easy to understand for developers working on the system.

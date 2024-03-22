@@ -1,0 +1,23 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Introduction
+
+Gyroscope is a decentralized protocol that aims to provide a robust stablecoin and automated market maker (AMM) system. At the heart of Gyroscope is the [Primary AMM](/core-contracts/pamm) (PAMM), which is responsible for the pricing mechanism of the protocol's native token, the Gyro Dollar (GYD).
+
+The PAMM contract utilizes a novel pricing curve that aims to maintain the GYD's peg to the US dollar, even in the face of volatile market conditions. This is achieved through a combination of dynamic parameters and advanced mathematical modeling, which is explained in detail in the [PAMM](/core-contracts/pamm) section.
+
+To ensure the safety and stability of the protocol, Gyroscope also includes several other key components:
+
+- [IGyroConfig](/core-contracts/igyro-config): A contract that stores and manages the global configuration settings for the protocol.
+- [IGyroVault](/core-contracts/igyro-vault): An interface for the vault components that make up the Gyroscope reserve.
+- [IMotherboard](/core-contracts/imotherboard): The central contract that coordinates the different pieces of the protocol.
+- [IReserve](/core-contracts/ireserve): The contract responsible for managing token deposits and withdrawals.
+- [ISafetyCheck](/core-contracts/isafety-check): An interface for checking the safety of mint and redeem operations.
+
+These core contracts work together to provide a secure and decentralized stablecoin solution, with the [Oracles](/oracles) subsection explaining the price feeds and price checking mechanisms in more detail.
+
+Throughout the Gyroscope protocol, various [Libraries and Utilities](/libraries-utilities) are used to handle common tasks, such as fixed-point arithmetic, flow calculations, and configuration management.
+
+Finally, the [Governance](/governance) section covers the contracts and interfaces related to the protocol's governance model, ensuring that the system can be updated and improved over time.
+
+By understanding these core components, Gyroscope developers and contributors will be well-equipped to build on and enhance the functionality of this decentralized stablecoin ecosystem.

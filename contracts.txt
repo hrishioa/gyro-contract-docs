@@ -1,0 +1,4358 @@
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "Math.sol";
+import "SafeCast.sol";
+import "EnumerableSet.sol";
+
+import "IUSDPriceOracle.sol";
+import "IRelativePriceOracle.sol";
+import "IUSDBatchPriceOracle.sol";
+import "EnumerableExtensions.sol";
+
+import "Governable.sol";
+
+import "Errors.sol";
+import "FixedPoint.sol";
+
+contract CheckedPriceOracle is IUSDPriceOracle, IUSDBatchPriceOracle, Governable {
+    using EnumerableSet for EnumerableSet.AddressSet;
+
+    using FixedPoint for uint256;
+    using SafeCast for uint256;
+    using SafeCast for int256;
+
+    uint256 public constant MAX_ABSOLUTE_WETH_DEVIATION = 50e18;
+    uint256 public constant INITIAL_RELATIVE_EPSILON = 0.02e18;
+    uint256 public constant MAX_RELATIVE_EPSILON = 0.1e18;
+
+    address public immutable wethAddress;
+
+    IUSDPriceOracle public usdOracle;
+    IRelativePriceOracle public relativeOracle;
+
+    uint256 public relativeEpsilon;
+
+    EnumerableSet.AddressSet internal trustedSignerPriceOracles;
+
+    /// This list is going to be used for the twaps to be input into the price level checks.
+    /// These are the addresses of the assets to be paired with ETH e.g. USDC or USDT
+    EnumerableSet.AddressSet internal quoteAssetsForPriceLevelTWAPS;
+
+    /// @dev This list is used to check if the relative price of the tokens are consistent
+    EnumerableSet.AddressSet internal assetsForRelativePriceCheck;
+
+    /// @dev Assets in this list are not required to have a relative price
+    EnumerableSet.AddressSet internal assetsWithIgnorableRelativePriceCheck;
+
+    event USDOracleUpdated(address indexed oracle);
+    event RelativeOracleUpdated(address indexed oracle);
+
+    event PriceLevelTWAPQuoteAssetAdded(address _addressToAdd);
+    event PriceLevelTWAPQuoteAssetRemoved(address _addressToRemove);
+
+    event AssetForRelativePriceCheckAdded(address _addressToAdd);
+    event AssetForRelativePriceCheckRemoved(address _addressToRemove);
+
+    event TrustedSignerOracleAdded(address _addressToAdd);
+    event TrustedSignerOracleRemoved(address _addressToRemove);
+
+    event AssetsWithIgnorableRelativePriceCheckAdded(address assetToAdd);
+    event AssetsWithIgnorableRelativePriceCheckRemoved(address assetToRemove);
+
+    /// _usdOracle is for Chainlink
+    constructor(
+        address _governor,
+        address _usdOracle,
+        address _relativeOracle,
+        address _wethAddress
+    ) Governable(_governor) {
+        require(_usdOracle != address(0), Errors.INVALID_ARGUMENT);
+        require(_relativeOracle != address(0), Errors.INVALID_ARGUMENT);
+        usdOracle = IUSDPriceOracle(_usdOracle);
+        relativeOracle = IRelativePriceOracle(_relativeOracle);
+        relativeEpsilon = INITIAL_RELATIVE_EPSILON;
+        wethAddress = _wethAddress;
+    }
+
+    function setUSDOracle(address _usdOracle) external governanceOnly {
+        usdOracle = IUSDPriceOracle(_usdOracle);
+        emit USDOracleUpdated(_usdOracle);
+    }
+
+    function setRelativeOracle(address _relativeOracle) external governanceOnly {
+        relativeOracle = IRelativePriceOracle(_relativeOracle);
+        emit RelativeOracleUpdated(_relativeOracle);
+    }
+
+    function addSignedPriceSource(address _signedAssetToAdd) external governanceOnly {
+        trustedSignerPriceOracles.add(_signedAssetToAdd);
+        emit TrustedSignerOracleAdded(_signedAssetToAdd);
+    }
+
+    function removeSignedPriceSource(address _signedAssetToRemove) external governanceOnly {
+        trustedSignerPriceOracles.remove(_signedAssetToRemove);
+        emit TrustedSignerOracleRemoved(_signedAssetToRemove);
+    }
+
+    function listSignedPriceSource() external view returns (address[] memory) {
+        return trustedSignerPriceOracles.values();
+    }
+
+    function addQuoteAssetsForPriceLevelTwap(address _quoteAssetToAdd) external governanceOnly {
+        quoteAssetsForPriceLevelTWAPS.add(_quoteAssetToAdd);
+        emit PriceLevelTWAPQuoteAssetAdded(_quoteAssetToAdd);
+    }
+
+    function listQuoteAssetsForPriceLevelTwap() external view returns (address[] memory) {
+        return quoteAssetsForPriceLevelTWAPS.values();
+    }
+
+    function removeQuoteAssetsForPriceLevelTwap(address _quoteAssetToRemove)
+        external
+        governanceOnly
+    {
+        quoteAssetsForPriceLevelTWAPS.remove(_quoteAssetToRemove);
+        emit PriceLevelTWAPQuoteAssetRemoved(_quoteAssetToRemove);
+    }
+
+    function addAssetForRelativePriceCheck(address assetToAdd) external governanceOnly {
+        assetsForRelativePriceCheck.add(assetToAdd);
+        emit AssetForRelativePriceCheckAdded(assetToAdd);
+    }
+
+    function listAssetForRelativePriceCheck() external view returns (address[] memory) {
+        return assetsForRelativePriceCheck.values();
+    }
+
+    function removeAssetForRelativePriceCheck(address assetToRemove) external governanceOnly {
+        assetsForRelativePriceCheck.remove(assetToRemove);
+        emit AssetForRelativePriceCheckRemoved(assetToRemove);
+    }
+
+    function addAssetsWithIgnorableRelativePriceCheck(address assetToAdd) external governanceOnly {
+        assetsWithIgnorableRelativePriceCheck.add(assetToAdd);
+        emit AssetsWithIgnorableRelativePriceCheckAdded(assetToAdd);
+    }
+
+    function listAssetsWithIgnorableRelativePriceCheck() external view returns (address[] memory) {
+        return assetsWithIgnorableRelativePriceCheck.values();
+    }
+
+    function removeAssetsWithIgnorableRelativePriceCheck(address assetToRemove)
+        external
+        governanceOnly
+    {
+        assetsWithIgnorableRelativePriceCheck.remove(assetToRemove);
+        emit AssetsWithIgnorableRelativePriceCheckRemoved(assetToRemove);
+    }
+
+    function batchRelativePriceCheck(address[] memory tokenAddresses, uint256[] memory prices)
+        internal
+        view
+        returns (uint256[] memory)
+    {
+        uint256[] memory priceLevelTwaps = new uint256[](
+            tokenAddresses.length * quoteAssetsForPriceLevelTWAPS.length()
+        );
+
+        uint256 k;
+        for (uint256 i = 0; i < tokenAddresses.length; i++) {
+            bool couldCheck = false;
+
+            for (uint256 j = 0; j < assetsForRelativePriceCheck.length(); j++) {
+                address assetForCheck = assetsForRelativePriceCheck.at(j);
+                if (
+                    tokenAddresses[i] == assetForCheck ||
+                    !relativeOracle.isPairSupported(tokenAddresses[i], assetForCheck)
+                ) {
+                    continue;
+                }
+
+                uint256 relativePrice = relativeOracle.getRelativePrice(
+                    tokenAddresses[i],
+                    assetForCheck
+                );
+
+                if (
+                    tokenAddresses[i] == wethAddress &&
+                    quoteAssetsForPriceLevelTWAPS.contains(assetForCheck)
+                ) {
+                    priceLevelTwaps[k] = relativePrice;
+                    k++;
+                } else if (
+                    assetForCheck == wethAddress &&
+                    quoteAssetsForPriceLevelTWAPS.contains(tokenAddresses[i])
+                ) {
+                    priceLevelTwaps[k] = FixedPoint.ONE.divDown(relativePrice);
+                    k++;
+                }
+
+                uint256 assetForCheckPrice = _findPrice(assetForCheck, tokenAddresses, prices);
+                _ensureRelativePriceConsistency(prices[i], assetForCheckPrice, relativePrice);
+
+                couldCheck = true;
+                break;
+            }
+
+            require(
+                couldCheck || assetsWithIgnorableRelativePriceCheck.contains(tokenAddresses[i]),
+                Errors.ASSET_NOT_SUPPORTED
+            );
+        }
+
+        uint256[] memory foundTwaps = new uint256[](k);
+        for (uint256 i = 0; i < k; i++) {
+            foundTwaps[i] = priceLevelTwaps[i];
+        }
+
+        return foundTwaps;
+    }
+
+    /// @inheritdoc IUSDPriceOracle
+    function getPriceUSD(address tokenAddress) public view override returns (uint256) {
+        address[] memory tokenAddresses = new address[](1);
+        tokenAddresses[0] = tokenAddress;
+        uint256[] memory prices = getPricesUSD(tokenAddresses);
+        return prices[0];
+    }
+
+    /// @inheritdoc IUSDBatchPriceOracle
+    function getPricesUSD(address[] memory tokenAddresses)
+        public
+        view
+        override
+        returns (uint256[] memory)
+    {
+        (uint256[] memory prices, , , ) = getPricesUSDWithMetadata(tokenAddresses);
+        return prices;
+    }
+
+    function getPricesUSDWithMetadata(address[] memory tokenAddresses)
+        public
+        view
+        returns (
+            uint256[] memory,
+            uint256,
+            uint256[] memory,
+            uint256[] memory
+        )
+    {
+        require(tokenAddresses.length > 0, Errors.INVALID_ARGUMENT);
+
+        uint256[] memory prices = new uint256[](tokenAddresses.length);
+
+        /// Will start with this being the WETH/USD price, this can be modified later if desired.
+        uint256 priceLevel;
+
+        for (uint256 i = 0; i < tokenAddresses.length; i++) {
+            prices[i] = usdOracle.getPriceUSD(tokenAddresses[i]);
+            if (tokenAddresses[i] == wethAddress) {
+                priceLevel = prices[i];
+            }
+        }
+
+        if (priceLevel == 0) {
+            priceLevel = usdOracle.getPriceUSD(wethAddress);
+        }
+
+        uint256[] memory priceLevelTwaps = batchRelativePriceCheck(tokenAddresses, prices);
+
+        uint256 numberOfTrustedSignerOracles = trustedSignerPriceOracles.length();
+        uint256[] memory signedPrices = new uint256[](numberOfTrustedSignerOracles);
+
+        for (uint256 i = 0; i < numberOfTrustedSignerOracles; i++) {
+            IUSDPriceOracle oracle = IUSDPriceOracle(trustedSignerPriceOracles.at(i));
+            signedPrices[i] = oracle.getPriceUSD(wethAddress);
+        }
+
+        _checkPriceLevel(priceLevel, signedPrices, priceLevelTwaps);
+
+        return (prices, priceLevel, signedPrices, priceLevelTwaps);
+    }
+
+    function setRelativeMaxEpsilon(uint256 _relativeEpsilon) external governanceOnly {
+        require(_relativeEpsilon > 0, Errors.INVALID_ARGUMENT);
+        require(_relativeEpsilon < MAX_RELATIVE_EPSILON, Errors.INVALID_ARGUMENT);
+
+        relativeEpsilon = _relativeEpsilon;
+    }
+
+    function _checkPriceLevel(
+        uint256 priceLevel,
+        uint256[] memory signedPrices,
+        uint256[] memory priceLevelTwaps
+    ) internal view {
+        uint256 trueWETH = getRobustWETHPrice(signedPrices, priceLevelTwaps);
+        uint256 absolutePriceDifference = priceLevel.absSub(trueWETH);
+        require(
+            absolutePriceDifference <= MAX_ABSOLUTE_WETH_DEVIATION,
+            Errors.ROOT_PRICE_NOT_GROUNDED
+        );
+    }
+
+    function _ensureRelativePriceConsistency(
+        uint256 aUSDPrice,
+        uint256 bUSDPrice,
+        uint256 abPrice
+    ) internal view {
+        uint256 abPriceFromUSD = aUSDPrice.divDown(bUSDPrice);
+        uint256 priceDifference = abPrice.absSub(abPriceFromUSD);
+        uint256 relativePriceDifference = priceDifference.divDown(abPrice);
+
+        require(relativePriceDifference <= relativeEpsilon, Errors.STALE_PRICE);
+    }
+
+    function _computeMinOrSecondMin(uint256[] memory twapPrices) internal pure returns (uint256) {
+        // min if there are two, or the 2nd min if more than two
+        uint256 min = twapPrices[0];
+        uint256 secondMin = 2**256 - 1;
+        for (uint256 i = 1; i < twapPrices.length; i++) {
+            if (twapPrices[i] < min) {
+                secondMin = min;
+                min = twapPrices[i];
+            } else if ((twapPrices[i] < secondMin)) {
+                secondMin = twapPrices[i];
+            }
+        }
+        if (twapPrices.length == 1) {
+            return twapPrices[0];
+        } else if (twapPrices.length == 2) {
+            return min;
+        } else {
+            return secondMin;
+        }
+    }
+
+    function _findPrice(
+        address target,
+        address[] memory tokenAddresses,
+        uint256[] memory prices
+    ) internal view returns (uint256) {
+        for (uint256 i = 0; i < tokenAddresses.length; i++) {
+            if (tokenAddresses[i] == target) {
+                return prices[i];
+            }
+        }
+        return usdOracle.getPriceUSD(target);
+    }
+
+    function _sort(uint256[] memory data) internal view returns (uint256[] memory) {
+        _quickSort(data, int256(0), int256(data.length - 1));
+        return data;
+    }
+
+    function _quickSort(
+        uint256[] memory arr,
+        int256 left,
+        int256 right
+    ) internal view {
+        int256 i = left;
+        int256 j = right;
+        if (i == j) return;
+        uint256 pivot = arr[uint256(left + (right - left) / 2)];
+        while (i <= j) {
+            while (arr[uint256(i)] < pivot) i++;
+            while (pivot < arr[uint256(j)]) j--;
+            if (i <= j) {
+                (arr[uint256(i)], arr[uint256(j)]) = (arr[uint256(j)], arr[uint256(i)]);
+                i++;
+                j--;
+            }
+        }
+        if (left < j) _quickSort(arr, left, j);
+        if (i < right) _quickSort(arr, i, right);
+    }
+
+    function _median(uint256[] memory array) internal view returns (uint256) {
+        _sort(array);
+        return
+            array.length % 2 == 0
+                ? Math.average(array[array.length / 2 - 1], array[array.length / 2])
+                : array[array.length / 2];
+    }
+
+    /// @notice this function provides an estimate of the true WETH price.
+    /// 1. Find the minimum TWAP price (or second minumum if >2 TWAP prices) from a given array.
+    /// 2. Add this to an array of signed prices
+    /// 3. Compute the median of this array
+    /// @param signedPrices an array of prices from trusted providers (e.g. Chainlink, Coinbase, OKEx ETH/USD price)
+    /// @param twapPrices an array of Time Weighted Moving Average ETH/stablecoin prices
+    function getRobustWETHPrice(uint256[] memory signedPrices, uint256[] memory twapPrices)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 minTWAP;
+        if (twapPrices.length == 0) {
+            return _median(signedPrices);
+        } else {
+            minTWAP = _computeMinOrSecondMin(twapPrices);
+            uint256[] memory prices = new uint256[](signedPrices.length + 1);
+            prices[prices.length - 1] = minTWAP;
+            for (uint256 i = 0; i < prices.length - 1; i++) {
+                prices[i] = signedPrices[i];
+            }
+            return _median(prices);
+        }
+    }
+}
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+/**
+ * @dev Standard math utilities missing in the Solidity language.
+ */
+library Math {
+    /**
+     * @dev Returns the largest of two numbers.
+     */
+    function max(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a >= b ? a : b;
+    }
+
+    /**
+     * @dev Returns the smallest of two numbers.
+     */
+    function min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
+    }
+
+    /**
+     * @dev Returns the average of two numbers. The result is rounded towards
+     * zero.
+     */
+    function average(uint256 a, uint256 b) internal pure returns (uint256) {
+        // (a + b) / 2 can overflow.
+        return (a & b) + (a ^ b) / 2;
+    }
+
+    /**
+     * @dev Returns the ceiling of the division of two numbers.
+     *
+     * This differs from standard division with `/` in that it rounds up instead
+     * of rounding down.
+     */
+    function ceilDiv(uint256 a, uint256 b) internal pure returns (uint256) {
+        // (a + b - 1) / b can overflow on addition, so we distribute.
+        return a / b + (a % b == 0 ? 0 : 1);
+    }
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+interface IUSDPriceOracle {
+    /// @notice Quotes the USD price of `tokenAddress`
+    /// The quoted price is always scaled with 18 decimals regardless of the
+    /// source used for the oracle.
+    /// @param tokenAddress the asset of which the price is to be quoted
+    /// @return the USD price of the asset
+    function getPriceUSD(address tokenAddress) external view returns (uint256);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+interface IRelativePriceOracle {
+    /// @notice Quotes the price of `baseToken` relative to `quoteToken`
+    /// The quoted price is always scaled with 18 decimals regardless of the
+    /// source used for the oracle.
+    /// @param baseToken the token of which the price is to be quoted
+    /// @param quoteToken the token used to denominate the price
+    /// @return the number of units of quote token per base token
+    function getRelativePrice(address baseToken, address quoteToken)
+        external
+        view
+        returns (uint256);
+
+    /// @notice Returns whether the oracle currently supports prices
+    /// for `baseToken` relative to `quoteToken`
+    function isPairSupported(address baseToken, address quoteToken) external view returns (bool);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+interface IUSDBatchPriceOracle {
+    /// @notice Quotes the USD price of `baseAssets`
+    /// The quoted prices is always scaled with 18 decimals regardless of the
+    /// source used for the oracle.
+    /// @param baseAssets the assets of which the price is to be quoted
+    /// @return the USD prices of the asset
+    function getPricesUSD(address[] memory baseAssets) external view returns (uint256[] memory);
+}
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "GovernableBase.sol";
+
+contract Governable is GovernableBase {
+    constructor(address _governor) {
+        governor = _governor;
+        emit GovernorChanged(address(0), _governor);
+    }
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "Errors.sol";
+import "IGovernable.sol";
+
+contract GovernableBase is IGovernable {
+    address public override governor;
+    address public override pendingGovernor;
+
+    modifier governanceOnly() {
+        require(msg.sender == governor, Errors.NOT_AUTHORIZED);
+        _;
+    }
+
+    /// @inheritdoc IGovernable
+    function changeGovernor(address newGovernor) external override governanceOnly {
+        require(address(newGovernor) != address(0), Errors.INVALID_ARGUMENT);
+        pendingGovernor = newGovernor;
+        emit GovernorChangeRequested(newGovernor);
+    }
+
+    /// @inheritdoc IGovernable
+    function acceptGovernance() external override {
+        require(msg.sender == pendingGovernor, Errors.NOT_AUTHORIZED);
+        address currentGovernor = governor;
+        governor = pendingGovernor;
+        pendingGovernor = address(0);
+        emit GovernorChanged(currentGovernor, msg.sender);
+    }
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+interface IGovernable {
+    /// @notice Emmited when the governor is changed
+    event GovernorChanged(address oldGovernor, address newGovernor);
+
+    /// @notice Emmited when the governor is change is requested
+    event GovernorChangeRequested(address newGovernor);
+
+    /// @notice Returns the current governor
+    function governor() external view returns (address);
+
+    /// @notice Returns the pending governor
+    function pendingGovernor() external view returns (address);
+
+    /// @notice Changes the governor
+    /// can only be called by the current governor
+    function changeGovernor(address newGovernor) external;
+
+    /// @notice Called by the pending governor to approve the change
+    function acceptGovernance() external;
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "TransparentUpgradeableProxy.sol";
+import {ProxyAdmin as ProxyAdminBase} from "ProxyAdmin.sol";
+
+contract FreezableTransparentUpgradeableProxy is TransparentUpgradeableProxy {
+    constructor(
+        address _logic,
+        address admin_,
+        bytes memory _data
+    ) payable TransparentUpgradeableProxy(_logic, admin_, _data) {}
+
+    /// @notice Set the admin to address(0), which will result in freezing
+    /// the implementation of the token
+    /// This is a non-reversible action
+    function freeze() external ifAdmin {
+        emit AdminChanged(_getAdmin(), address(0));
+        StorageSlot.getAddressSlot(_ADMIN_SLOT).value = address(0);
+    }
+}
+
+/// @notice Only used to make ProxyAdmin available in project contracts
+contract ProxyAdmin is ProxyAdminBase {
+
+}
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import "ERC1967Proxy.sol";
+
+/**
+ * @dev This contract implements a proxy that is upgradeable by an admin.
+ *
+ * To avoid https://medium.com/nomic-labs-blog/malicious-backdoors-in-ethereum-proxies-62629adf3357[proxy selector
+ * clashing], which can potentially be used in an attack, this contract uses the
+ * https://blog.openzeppelin.com/the-transparent-proxy-pattern/[transparent proxy pattern]. This pattern implies two
+ * things that go hand in hand:
+ *
+ * 1. If any account other than the admin calls the proxy, the call will be forwarded to the implementation, even if
+ * that call matches one of the admin functions exposed by the proxy itself.
+ * 2. If the admin calls the proxy, it can access the admin functions, but its calls will never be forwarded to the
+ * implementation. If the admin tries to call a function on the implementation it will fail with an error that says
+ * "admin cannot fallback to proxy target".
+ *
+ * These properties mean that the admin account can only be used for admin actions like upgrading the proxy or changing
+ * the admin, so it's best if it's a dedicated account that is not used for anything else. This will avoid headaches due
+ * to sudden errors when trying to call a function from the proxy implementation.
+ *
+ * Our recommendation is for the dedicated account to be an instance of the {ProxyAdmin} contract. If set up this way,
+ * you should think of the `ProxyAdmin` instance as the real administrative interface of your proxy.
+ */
+contract TransparentUpgradeableProxy is ERC1967Proxy {
+    /**
+     * @dev Initializes an upgradeable proxy managed by `_admin`, backed by the implementation at `_logic`, and
+     * optionally initialized with `_data` as explained in {ERC1967Proxy-constructor}.
+     */
+    constructor(
+        address _logic,
+        address admin_,
+        bytes memory _data
+    ) payable ERC1967Proxy(_logic, _data) {
+        assert(_ADMIN_SLOT == bytes32(uint256(keccak256("eip1967.proxy.admin")) - 1));
+        _changeAdmin(admin_);
+    }
+
+    /**
+     * @dev Modifier used internally that will delegate the call to the implementation unless the sender is the admin.
+     */
+    modifier ifAdmin() {
+        if (msg.sender == _getAdmin()) {
+            _;
+        } else {
+            _fallback();
+        }
+    }
+
+    /**
+     * @dev Returns the current admin.
+     *
+     * NOTE: Only the admin can call this function. See {ProxyAdmin-getProxyAdmin}.
+     *
+     * TIP: To get this value clients can read directly from the storage slot shown below (specified by EIP1967) using the
+     * https://eth.wiki/json-rpc/API#eth_getstorageat[`eth_getStorageAt`] RPC call.
+     * `0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103`
+     */
+    function admin() external ifAdmin returns (address admin_) {
+        admin_ = _getAdmin();
+    }
+
+    /**
+     * @dev Returns the current implementation.
+     *
+     * NOTE: Only the admin can call this function. See {ProxyAdmin-getProxyImplementation}.
+     *
+     * TIP: To get this value clients can read directly from the storage slot shown below (specified by EIP1967) using the
+     * https://eth.wiki/json-rpc/API#eth_getstorageat[`eth_getStorageAt`] RPC call.
+     * `0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc`
+     */
+    function implementation() external ifAdmin returns (address implementation_) {
+        implementation_ = _implementation();
+    }
+
+    /**
+     * @dev Changes the admin of the proxy.
+     *
+     * Emits an {AdminChanged} event.
+     *
+     * NOTE: Only the admin can call this function. See {ProxyAdmin-changeProxyAdmin}.
+     */
+    function changeAdmin(address newAdmin) external virtual ifAdmin {
+        _changeAdmin(newAdmin);
+    }
+
+    /**
+     * @dev Upgrade the implementation of the proxy.
+     *
+     * NOTE: Only the admin can call this function. See {ProxyAdmin-upgrade}.
+     */
+    function upgradeTo(address newImplementation) external ifAdmin {
+        _upgradeToAndCall(newImplementation, bytes(""), false);
+    }
+
+    /**
+     * @dev Upgrade the implementation of the proxy, and then call a function from the new implementation as specified
+     * by `data`, which should be an encoded function call. This is useful to initialize new storage variables in the
+     * proxied contract.
+     *
+     * NOTE: Only the admin can call this function. See {ProxyAdmin-upgradeAndCall}.
+     */
+    function upgradeToAndCall(address newImplementation, bytes calldata data) external payable ifAdmin {
+        _upgradeToAndCall(newImplementation, data, true);
+    }
+
+    /**
+     * @dev Returns the current admin.
+     */
+    function _admin() internal view virtual returns (address) {
+        return _getAdmin();
+    }
+
+    /**
+     * @dev Makes sure the admin cannot access the fallback function. See {Proxy-_beforeFallback}.
+     */
+    function _beforeFallback() internal virtual override {
+        require(msg.sender != _getAdmin(), "TransparentUpgradeableProxy: admin cannot fallback to proxy target");
+        super._beforeFallback();
+    }
+}
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import "Proxy.sol";
+import "ERC1967Upgrade.sol";
+
+/**
+ * @dev This contract implements an upgradeable proxy. It is upgradeable because calls are delegated to an
+ * implementation address that can be changed. This address is stored in storage in the location specified by
+ * https://eips.ethereum.org/EIPS/eip-1967[EIP1967], so that it doesn't conflict with the storage layout of the
+ * implementation behind the proxy.
+ */
+contract ERC1967Proxy is Proxy, ERC1967Upgrade {
+    /**
+     * @dev Initializes the upgradeable proxy with an initial implementation specified by `_logic`.
+     *
+     * If `_data` is nonempty, it's used as data in a delegate call to `_logic`. This will typically be an encoded
+     * function call, and allows initializating the storage of the proxy like a Solidity constructor.
+     */
+    constructor(address _logic, bytes memory _data) payable {
+        assert(_IMPLEMENTATION_SLOT == bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1));
+        _upgradeToAndCall(_logic, _data, false);
+    }
+
+    /**
+     * @dev Returns the current implementation address.
+     */
+    function _implementation() internal view virtual override returns (address impl) {
+        return ERC1967Upgrade._getImplementation();
+    }
+}
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+/**
+ * @dev This abstract contract provides a fallback function that delegates all calls to another contract using the EVM
+ * instruction `delegatecall`. We refer to the second contract as the _implementation_ behind the proxy, and it has to
+ * be specified by overriding the virtual {_implementation} function.
+ *
+ * Additionally, delegation to the implementation can be triggered manually through the {_fallback} function, or to a
+ * different contract through the {_delegate} function.
+ *
+ * The success and return data of the delegated call will be returned back to the caller of the proxy.
+ */
+abstract contract Proxy {
+    /**
+     * @dev Delegates the current call to `implementation`.
+     *
+     * This function does not return to its internall call site, it will return directly to the external caller.
+     */
+    function _delegate(address implementation) internal virtual {
+        assembly {
+            // Copy msg.data. We take full control of memory in this inline assembly
+            // block because it will not return to Solidity code. We overwrite the
+            // Solidity scratch pad at memory position 0.
+            calldatacopy(0, 0, calldatasize())
+
+            // Call the implementation.
+            // out and outsize are 0 because we don't know the size yet.
+            let result := delegatecall(gas(), implementation, 0, calldatasize(), 0, 0)
+
+            // Copy the returned data.
+            returndatacopy(0, 0, returndatasize())
+
+            switch result
+            // delegatecall returns 0 on error.
+            case 0 {
+                revert(0, returndatasize())
+            }
+            default {
+                return(0, returndatasize())
+            }
+        }
+    }
+
+    /**
+     * @dev This is a virtual function that should be overriden so it returns the address to which the fallback function
+     * and {_fallback} should delegate.
+     */
+    function _implementation() internal view virtual returns (address);
+
+    /**
+     * @dev Delegates the current call to the address returned by `_implementation()`.
+     *
+     * This function does not return to its internall call site, it will return directly to the external caller.
+     */
+    function _fallback() internal virtual {
+        _beforeFallback();
+        _delegate(_implementation());
+    }
+
+    /**
+     * @dev Fallback function that delegates calls to the address returned by `_implementation()`. Will run if no other
+     * function in the contract matches the call data.
+     */
+    fallback() external payable virtual {
+        _fallback();
+    }
+
+    /**
+     * @dev Fallback function that delegates calls to the address returned by `_implementation()`. Will run if call data
+     * is empty.
+     */
+    receive() external payable virtual {
+        _fallback();
+    }
+
+    /**
+     * @dev Hook that is called before falling back to the implementation. Can happen as part of a manual `_fallback`
+     * call, or as part of the Solidity `fallback` or `receive` functions.
+     *
+     * If overriden should call `super._beforeFallback()`.
+     */
+    function _beforeFallback() internal virtual {}
+}
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+/**
+ * @dev This is the interface that {BeaconProxy} expects of its beacon.
+ */
+interface IBeacon {
+    /**
+     * @dev Must return an address that can be used as a delegate call target.
+     *
+     * {BeaconProxy} will check that this address is a contract.
+     */
+    function implementation() external view returns (address);
+}// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+/**
+ * @dev Library for reading and writing primitive types to specific storage slots.
+ *
+ * Storage slots are often used to avoid storage conflict when dealing with upgradeable contracts.
+ * This library helps with reading and writing to such slots without the need for inline assembly.
+ *
+ * The functions in this library return Slot structs that contain a `value` member that can be used to read or write.
+ *
+ * Example usage to set ERC1967 implementation slot:
+ * ```
+ * contract ERC1967 {
+ *     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+ *
+ *     function _getImplementation() internal view returns (address) {
+ *         return StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
+ *     }
+ *
+ *     function _setImplementation(address newImplementation) internal {
+ *         require(Address.isContract(newImplementation), "ERC1967: new implementation is not a contract");
+ *         StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = newImplementation;
+ *     }
+ * }
+ * ```
+ *
+ * _Available since v4.1 for `address`, `bool`, `bytes32`, and `uint256`._
+ */
+library StorageSlot {
+    struct AddressSlot {
+        address value;
+    }
+
+    struct BooleanSlot {
+        bool value;
+    }
+
+    struct Bytes32Slot {
+        bytes32 value;
+    }
+
+    struct Uint256Slot {
+        uint256 value;
+    }
+
+    /**
+     * @dev Returns an `AddressSlot` with member `value` located at `slot`.
+     */
+    function getAddressSlot(bytes32 slot) internal pure returns (AddressSlot storage r) {
+        assembly {
+            r.slot := slot
+        }
+    }
+
+    /**
+     * @dev Returns an `BooleanSlot` with member `value` located at `slot`.
+     */
+    function getBooleanSlot(bytes32 slot) internal pure returns (BooleanSlot storage r) {
+        assembly {
+            r.slot := slot
+        }
+    }
+
+    /**
+     * @dev Returns an `Bytes32Slot` with member `value` located at `slot`.
+     */
+    function getBytes32Slot(bytes32 slot) internal pure returns (Bytes32Slot storage r) {
+        assembly {
+            r.slot := slot
+        }
+    }
+
+    /**
+     * @dev Returns an `Uint256Slot` with member `value` located at `slot`.
+     */
+    function getUint256Slot(bytes32 slot) internal pure returns (Uint256Slot storage r) {
+        assembly {
+            r.slot := slot
+        }
+    }
+}// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+/**
+ * @dev Collection of functions related to the address type
+ */
+library Address {
+    /**
+     * @dev Returns true if `account` is a contract.
+     *
+     * [IMPORTANT]
+     * ====
+     * It is unsafe to assume that an address for which this function returns
+     * false is an externally-owned account (EOA) and not a contract.
+     *
+     * Among others, `isContract` will return false for the following
+     * types of addresses:
+     *
+     *  - an externally-owned account
+     *  - a contract in construction
+     *  - an address where a contract will be created
+     *  - an address where a contract lived, but was destroyed
+     * ====
+     */
+    function isContract(address account) internal view returns (bool) {
+        // This method relies on extcodesize, which returns 0 for contracts in
+        // construction, since the code is only stored at the end of the
+        // constructor execution.
+
+        uint256 size;
+        assembly {
+            size := extcodesize(account)
+        }
+        return size > 0;
+    }
+
+    /**
+     * @dev Replacement for Solidity's `transfer`: sends `amount` wei to
+     * `recipient`, forwarding all available gas and reverting on errors.
+     *
+     * https://eips.ethereum.org/EIPS/eip-1884[EIP1884] increases the gas cost
+     * of certain opcodes, possibly making contracts go over the 2300 gas limit
+     * imposed by `transfer`, making them unable to receive funds via
+     * `transfer`. {sendValue} removes this limitation.
+     *
+     * https://diligence.consensys.net/posts/2019/09/stop-using-soliditys-transfer-now/[Learn more].
+     *
+     * IMPORTANT: because control is transferred to `recipient`, care must be
+     * taken to not create reentrancy vulnerabilities. Consider using
+     * {ReentrancyGuard} or the
+     * https://solidity.readthedocs.io/en/v0.5.11/security-considerations.html#use-the-checks-effects-interactions-pattern[checks-effects-interactions pattern].
+     */
+    function sendValue(address payable recipient, uint256 amount) internal {
+        require(address(this).balance >= amount, "Address: insufficient balance");
+
+        (bool success, ) = recipient.call{value: amount}("");
+        require(success, "Address: unable to send value, recipient may have reverted");
+    }
+
+    /**
+     * @dev Performs a Solidity function call using a low level `call`. A
+     * plain `call` is an unsafe replacement for a function call: use this
+     * function instead.
+     *
+     * If `target` reverts with a revert reason, it is bubbled up by this
+     * function (like regular Solidity function calls).
+     *
+     * Returns the raw returned data. To convert to the expected return value,
+     * use https://solidity.readthedocs.io/en/latest/units-and-global-variables.html?highlight=abi.decode#abi-encoding-and-decoding-functions[`abi.decode`].
+     *
+     * Requirements:
+     *
+     * - `target` must be a contract.
+     * - calling `target` with `data` must not revert.
+     *
+     * _Available since v3.1._
+     */
+    function functionCall(address target, bytes memory data) internal returns (bytes memory) {
+        return functionCall(target, data, "Address: low-level call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`], but with
+     * `errorMessage` as a fallback revert reason when `target` reverts.
+     *
+     * _Available since v3.1._
+     */
+    function functionCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, 0, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but also transferring `value` wei to `target`.
+     *
+     * Requirements:
+     *
+     * - the calling contract must have an ETH balance of at least `value`.
+     * - the called Solidity function must be `payable`.
+     *
+     * _Available since v3.1._
+     */
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value
+    ) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, value, "Address: low-level call with value failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCallWithValue-address-bytes-uint256-}[`functionCallWithValue`], but
+     * with `errorMessage` as a fallback revert reason when `target` reverts.
+     *
+     * _Available since v3.1._
+     */
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        require(address(this).balance >= value, "Address: insufficient balance for call");
+        require(isContract(target), "Address: call to non-contract");
+
+        (bool success, bytes memory returndata) = target.call{value: value}(data);
+        return verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but performing a static call.
+     *
+     * _Available since v3.3._
+     */
+    function functionStaticCall(address target, bytes memory data) internal view returns (bytes memory) {
+        return functionStaticCall(target, data, "Address: low-level static call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-string-}[`functionCall`],
+     * but performing a static call.
+     *
+     * _Available since v3.3._
+     */
+    function functionStaticCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal view returns (bytes memory) {
+        require(isContract(target), "Address: static call to non-contract");
+
+        (bool success, bytes memory returndata) = target.staticcall(data);
+        return verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but performing a delegate call.
+     *
+     * _Available since v3.4._
+     */
+    function functionDelegateCall(address target, bytes memory data) internal returns (bytes memory) {
+        return functionDelegateCall(target, data, "Address: low-level delegate call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-string-}[`functionCall`],
+     * but performing a delegate call.
+     *
+     * _Available since v3.4._
+     */
+    function functionDelegateCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        require(isContract(target), "Address: delegate call to non-contract");
+
+        (bool success, bytes memory returndata) = target.delegatecall(data);
+        return verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Tool to verifies that a low level call was successful, and revert if it wasn't, either by bubbling the
+     * revert reason using the provided one.
+     *
+     * _Available since v4.3._
+     */
+    function verifyCallResult(
+        bool success,
+        bytes memory returndata,
+        string memory errorMessage
+    ) internal pure returns (bytes memory) {
+        if (success) {
+            return returndata;
+        } else {
+            // Look for revert reason and bubble it up if present
+            if (returndata.length > 0) {
+                // The easiest way to bubble the revert reason is using memory via assembly
+
+                assembly {
+                    let returndata_size := mload(returndata)
+                    revert(add(32, returndata), returndata_size)
+                }
+            } else {
+                revert(errorMessage);
+            }
+        }
+    }
+}// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import "TransparentUpgradeableProxy.sol";
+import "Ownable.sol";
+
+/**
+ * @dev This is an auxiliary contract meant to be assigned as the admin of a {TransparentUpgradeableProxy}. For an
+ * explanation of why you would want to use this see the documentation for {TransparentUpgradeableProxy}.
+ */
+contract ProxyAdmin is Ownable {
+    /**
+     * @dev Returns the current implementation of `proxy`.
+     *
+     * Requirements:
+     *
+     * - This contract must be the admin of `proxy`.
+     */
+    function getProxyImplementation(TransparentUpgradeableProxy proxy) public view virtual returns (address) {
+        // We need to manually run the static call since the getter cannot be flagged as view
+        // bytes4(keccak256("implementation()")) == 0x5c60da1b
+        (bool success, bytes memory returndata) = address(proxy).staticcall(hex"5c60da1b");
+        require(success);
+        return abi.decode(returndata, (address));
+    }
+
+    /**
+     * @dev Returns the current admin of `proxy`.
+     *
+     * Requirements:
+     *
+     * - This contract must be the admin of `proxy`.
+     */
+    function getProxyAdmin(TransparentUpgradeableProxy proxy) public view virtual returns (address) {
+        // We need to manually run the static call since the getter cannot be flagged as view
+        // bytes4(keccak256("admin()")) == 0xf851a440
+        (bool success, bytes memory returndata) = address(proxy).staticcall(hex"f851a440");
+        require(success);
+        return abi.decode(returndata, (address));
+    }
+
+    /**
+     * @dev Changes the admin of `proxy` to `newAdmin`.
+     *
+     * Requirements:
+     *
+     * - This contract must be the current admin of `proxy`.
+     */
+    function changeProxyAdmin(TransparentUpgradeableProxy proxy, address newAdmin) public virtual onlyOwner {
+        proxy.changeAdmin(newAdmin);
+    }
+
+    /**
+     * @dev Upgrades `proxy` to `implementation`. See {TransparentUpgradeableProxy-upgradeTo}.
+     *
+     * Requirements:
+     *
+     * - This contract must be the admin of `proxy`.
+     */
+    function upgrade(TransparentUpgradeableProxy proxy, address implementation) public virtual onlyOwner {
+        proxy.upgradeTo(implementation);
+    }
+
+    /**
+     * @dev Upgrades `proxy` to `implementation` and calls a function on the new implementation. See
+     * {TransparentUpgradeableProxy-upgradeToAndCall}.
+     *
+     * Requirements:
+     *
+     * - This contract must be the admin of `proxy`.
+     */
+    function upgradeAndCall(
+        TransparentUpgradeableProxy proxy,
+        address implementation,
+        bytes memory data
+    ) public payable virtual onlyOwner {
+        proxy.upgradeToAndCall{value: msg.value}(implementation, data);
+    }
+}// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import "Context.sol";
+
+/**
+ * @dev Contract module which provides a basic access control mechanism, where
+ * there is an account (an owner) that can be granted exclusive access to
+ * specific functions.
+ *
+ * By default, the owner account will be the one that deploys the contract. This
+ * can later be changed with {transferOwnership}.
+ *
+ * This module is used through inheritance. It will make available the modifier
+ * `onlyOwner`, which can be applied to your functions to restrict their use to
+ * the owner.
+ */
+abstract contract Ownable is Context {
+    address private _owner;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /**
+     * @dev Initializes the contract setting the deployer as the initial owner.
+     */
+    constructor() {
+        _setOwner(_msgSender());
+    }
+
+    /**
+     * @dev Returns the address of the current owner.
+     */
+    function owner() public view virtual returns (address) {
+        return _owner;
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        require(owner() == _msgSender(), "Ownable: caller is not the owner");
+        _;
+    }
+
+    /**
+     * @dev Leaves the contract without owner. It will not be possible to call
+     * `onlyOwner` functions anymore. Can only be called by the current owner.
+     *
+     * NOTE: Renouncing ownership will leave the contract without an owner,
+     * thereby removing any functionality that is only available to the owner.
+     */
+    function renounceOwnership() public virtual onlyOwner {
+        _setOwner(address(0));
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     */
+    function transferOwnership(address newOwner) public virtual onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        _setOwner(newOwner);
+    }
+
+    function _setOwner(address newOwner) private {
+        address oldOwner = _owner;
+        _owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
+}// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+/**
+ * @dev Provides information about the current execution context, including the
+ * sender of the transaction and its data. While these are generally available
+ * via msg.sender and msg.data, they should not be accessed in such a direct
+ * manner, since when dealing with meta-transactions the account sending and
+ * paying for execution may not be the actual sender (as far as an application
+ * is concerned).
+ *
+ * This contract is only required for intermediate, library-like contracts.
+ */
+abstract contract Context {
+    function _msgSender() internal view virtual returns (address) {
+        return msg.sender;
+    }
+
+    function _msgData() internal view virtual returns (bytes calldata) {
+        return msg.data;
+    }
+}// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "Ownable.sol";
+
+import "IPAMM.sol";
+import "IGyroConfig.sol";
+
+import "LogExpMath.sol";
+import "FixedPoint.sol";
+import "Flow.sol";
+import "ConfigHelpers.sol";
+
+import "Governable.sol";
+
+/// @notice Implements the primary AMM pricing mechanism
+contract PrimaryAMMV1 is IPAMM, Governable {
+    using LogExpMath for uint256;
+    using FixedPoint for uint256;
+    using ConfigHelpers for IGyroConfig;
+
+    IGyroConfig public immutable gyroConfig;
+
+    /// @dev we tolerate underflows due to numerical issues up to 1e6, so 1e-12
+    /// given our 1e18 scale
+    uint256 internal constant _UNDERFLOW_EPSILON = 1e6;
+
+    uint256 internal constant ONE = 1e18;
+    uint256 internal constant TWO = 2e18;
+    uint256 internal constant ANCHOR = ONE;
+
+    modifier onlyMotherboard() {
+        require(msg.sender == address(gyroConfig.getMotherboard()), Errors.NOT_AUTHORIZED);
+        _;
+    }
+
+    enum Region {
+        CASE_i,
+        CASE_I_ii,
+        CASE_I_iii,
+        CASE_II_H,
+        CASE_II_L,
+        CASE_III_H,
+        CASE_III_L
+    }
+
+    struct State {
+        uint256 redemptionLevel; // x
+        uint256 reserveValue; // b
+        uint256 totalGyroSupply; // y
+    }
+
+    struct DerivedParams {
+        uint256 baThresholdRegionI; // b_a^{I/II}
+        uint256 baThresholdRegionII; // b_a^{II/III}
+        uint256 xlThresholdAtThresholdI; // x_L^{I/II}
+        uint256 xlThresholdAtThresholdII; // x_L^{II/III}
+        uint256 baThresholdIIHL; // ba^{h/l}
+        uint256 baThresholdIIIHL; // ba^{H/L}
+        uint256 xuThresholdIIHL; // x_U^{h/l}
+        uint256 xlThresholdIIHL; // x_L^{h/l}
+        uint256 alphaThresholdIIIHL; // α^{H/L}
+        uint256 xlThresholdIIIHL; // x_L^{H/L}
+    }
+
+    /// @notice parameters of the primary AMM
+    Params public systemParams;
+
+    /// @notice current redemption level of the primary AMM
+    uint256 public redemptionLevel;
+
+    /// @notice the last block at which a redemption occured
+    uint256 public lastRedemptionBlock;
+
+    /// @notice Initializes the PAMM with the given system parameters
+    constructor(
+        address _governor,
+        address _gyroConfig,
+        Params memory params
+    ) Governable(_governor) {
+        require(_gyroConfig != address(0), Errors.INVALID_ARGUMENT);
+        gyroConfig = IGyroConfig(_gyroConfig);
+        systemParams = params;
+    }
+
+    /// @inheritdoc IPAMM
+    function setSystemParams(Params memory params) external governanceOnly {
+        systemParams = params;
+
+        // NOTE: this is not strictly needed but ensures that the given
+        // parameters allow to compute the derived parameters without underflowing
+        createDerivedParams(params);
+
+        emit SystemParamsUpdated(
+            params.alphaBar,
+            params.xuBar,
+            params.thetaBar,
+            params.outflowMemory
+        );
+    }
+
+    /// Helpers to compute various parameters
+
+    /// @dev Proposition 3 (section 3) of the paper
+    function computeAlpha(
+        uint256 ba,
+        uint256 ya,
+        uint256 thetaBar,
+        uint256 alphaBar
+    ) internal pure returns (uint256) {
+        uint256 ra = ba.divDown(ya);
+        uint256 alphaMin = alphaBar.divDown(ya);
+        uint256 alphaHat;
+        if (ra >= (ONE + thetaBar) / 2) {
+            alphaHat = TWO.mulDown(ONE - ra).divDown(ya);
+        } else {
+            uint256 numerator = (ONE - thetaBar)**2;
+            uint256 denominator = ba - thetaBar.mulDown(ya);
+            alphaHat = numerator / (denominator * 2);
+        }
+        return alphaHat.max(alphaMin);
+    }
+
+    /// @dev Proposition 1 (section 3) of the paper
+    function computeReserveFixedParams(
+        uint256 x,
+        uint256 ba,
+        uint256 ya,
+        uint256 alpha,
+        uint256 xu,
+        uint256 xl
+    ) internal pure returns (uint256) {
+        if (x <= xu) {
+            return ba - x;
+        }
+        if (x <= xl) {
+            return ba - x + (alpha * (x - xu).squareDown()) / TWO;
+        }
+        // x > xl:
+        uint256 rl = ONE - alpha.mulDown(xl - xu);
+        return rl.mulDown(ya - x);
+    }
+
+    /// @dev Proposition 2 (section 3) of the paper
+    function computeXl(
+        uint256 ba,
+        uint256 ya,
+        uint256 alpha,
+        uint256 xu,
+        bool ignoreUnderflow
+    ) internal pure returns (uint256) {
+        require(ba < ya, Errors.INVALID_ARGUMENT);
+        uint256 left = (ya - xu).squareUp();
+        uint256 right = (TWO * (ya - ba)) / alpha;
+        if (left >= right) {
+            return ya - (left - right).sqrt();
+        } else {
+            require(ignoreUnderflow || left + _UNDERFLOW_EPSILON >= right, Errors.SUB_OVERFLOW);
+            return ya;
+        }
+    }
+
+    /// @dev Proposition 4 (section 3) of the paper
+    function computeXu(
+        uint256 ba,
+        uint256 ya,
+        uint256 alpha,
+        uint256 xuBar,
+        uint256 theta
+    ) internal pure returns (uint256) {
+        uint256 delta = ya - ba;
+        uint256 xuMax = xuBar.mulDown(ya);
+        uint256 xu;
+        if (alpha.mulDown(delta) <= theta**2 / TWO) {
+            uint256 rh = ((TWO * delta) / alpha);
+            uint256 rhSqrt = rh.sqrt();
+            xu = rhSqrt >= ya ? 0 : ya - rhSqrt;
+        } else {
+            uint256 subtracted = delta.divDown(theta) + theta.divDown(2 * alpha);
+            xu = subtracted >= ya ? 0 : ya - subtracted;
+        }
+
+        return xu.min(xuMax);
+    }
+
+    /// @dev Lemma 4 (seection 7) of the paper
+    function computeBa(uint256 xu, Params memory params) internal pure returns (uint256) {
+        require(ONE >= xu, "ya must be greater than xu");
+        uint256 alpha = params.alphaBar;
+
+        uint256 yz = ANCHOR - xu;
+        if (ONE - alpha.mulDown(yz) >= params.thetaBar)
+            return ANCHOR - (alpha * yz.squareDown()) / TWO;
+        uint256 theta = ONE - params.thetaBar;
+        return ANCHOR - theta.mulDown(yz) + theta**2 / (2 * alpha);
+    }
+
+    /// @dev Algorithm 1 (section 7) of the paper
+    function createDerivedParams(Params memory params)
+        internal
+        pure
+        returns (DerivedParams memory)
+    {
+        DerivedParams memory derived;
+
+        derived.baThresholdRegionI = computeBa(params.xuBar, params);
+        derived.baThresholdRegionII = computeBa(0, params);
+
+        derived.xlThresholdAtThresholdI = computeXl(
+            derived.baThresholdRegionI,
+            ONE,
+            params.alphaBar,
+            params.xuBar,
+            true
+        );
+        derived.xlThresholdAtThresholdII = computeXl(
+            derived.baThresholdRegionII,
+            ONE,
+            params.alphaBar,
+            0,
+            true
+        );
+
+        uint256 theta = ONE - params.thetaBar;
+        derived.baThresholdIIHL = ONE - (theta**2) / (2 * params.alphaBar);
+
+        derived.xuThresholdIIHL = computeXu(
+            derived.baThresholdIIHL,
+            ONE,
+            params.alphaBar,
+            params.xuBar,
+            theta
+        );
+        derived.xlThresholdIIHL = computeXl(
+            derived.baThresholdIIHL,
+            ONE,
+            params.alphaBar,
+            derived.xuThresholdIIHL,
+            true
+        );
+
+        derived.baThresholdIIIHL = (ONE + params.thetaBar) / 2;
+        derived.alphaThresholdIIIHL = computeAlpha(
+            derived.baThresholdIIIHL,
+            ONE,
+            params.thetaBar,
+            params.alphaBar
+        );
+
+        derived.xlThresholdIIIHL = computeXl(
+            derived.baThresholdIIIHL,
+            ONE,
+            derived.alphaThresholdIIIHL,
+            0,
+            true
+        );
+
+        return derived;
+    }
+
+    function computeReserve(
+        uint256 x,
+        uint256 ba,
+        uint256 ya,
+        Params memory params
+    ) internal pure returns (uint256) {
+        uint256 alpha = computeAlpha(ba, ya, params.thetaBar, params.alphaBar);
+        uint256 xu = computeXu(ba, ya, alpha, params.xuBar, ONE - params.thetaBar);
+        uint256 xl = computeXl(ba, ya, alpha, xu, false);
+        return computeReserveFixedParams(x, ba, ya, alpha, xu, xl);
+    }
+
+    function isInFirstRegion(
+        State memory normalizedState,
+        Params memory params,
+        DerivedParams memory derived
+    ) internal pure returns (bool) {
+        return
+            normalizedState.reserveValue >=
+            computeReserveFixedParams(
+                normalizedState.redemptionLevel,
+                derived.baThresholdRegionI,
+                ONE,
+                params.alphaBar,
+                params.xuBar,
+                derived.xlThresholdAtThresholdI
+            );
+    }
+
+    function isInSecondRegion(
+        State memory normalizedState,
+        uint256 alphaBar,
+        DerivedParams memory derived
+    ) internal pure returns (bool) {
+        return
+            normalizedState.reserveValue >=
+            computeReserveFixedParams(
+                normalizedState.redemptionLevel,
+                derived.baThresholdRegionII,
+                ONE,
+                alphaBar,
+                0,
+                derived.xlThresholdAtThresholdII
+            );
+    }
+
+    function isInSecondRegionHigh(
+        State memory normalizedState,
+        uint256 alphaBar,
+        DerivedParams memory derived
+    ) internal pure returns (bool) {
+        return
+            normalizedState.reserveValue >=
+            computeReserveFixedParams(
+                normalizedState.redemptionLevel,
+                derived.baThresholdIIHL,
+                ONE,
+                alphaBar,
+                derived.xuThresholdIIHL,
+                derived.xlThresholdIIHL
+            );
+    }
+
+    function isInThirdRegionHigh(State memory normalizedState, DerivedParams memory derived)
+        internal
+        pure
+        returns (bool)
+    {
+        return
+            normalizedState.reserveValue >=
+            computeReserveFixedParams(
+                normalizedState.redemptionLevel,
+                derived.baThresholdIIIHL,
+                ONE,
+                derived.alphaThresholdIIIHL,
+                0,
+                derived.xlThresholdIIIHL
+            );
+    }
+
+    function computeReserveValueRegion(
+        State memory normalizedState,
+        Params memory params,
+        DerivedParams memory derived
+    ) internal pure returns (Region) {
+        if (isInFirstRegion(normalizedState, params, derived)) {
+            // case I
+            if (normalizedState.redemptionLevel <= params.xuBar) return Region.CASE_i;
+
+            uint256 lhs = normalizedState.reserveValue.divDown(normalizedState.totalGyroSupply);
+            uint256 rhs = ONE -
+                uint256(params.alphaBar).mulDown(normalizedState.redemptionLevel - params.xuBar);
+            if (lhs <= rhs) return Region.CASE_I_ii;
+            return Region.CASE_I_iii;
+        }
+
+        if (isInSecondRegion(normalizedState, params.alphaBar, derived)) {
+            // case II
+            if (isInSecondRegionHigh(normalizedState, params.alphaBar, derived)) {
+                // case II_h
+                if (
+                    normalizedState.totalGyroSupply - normalizedState.reserveValue <=
+                    (normalizedState.totalGyroSupply.squareDown() * params.alphaBar) / TWO
+                ) return Region.CASE_i;
+                return Region.CASE_II_H;
+            }
+
+            uint256 theta = ONE - params.thetaBar;
+            if (
+                normalizedState.reserveValue -
+                    uint256(params.thetaBar).mulDown(normalizedState.totalGyroSupply) >=
+                theta**2 / (2 * params.alphaBar)
+            ) return Region.CASE_i;
+            return Region.CASE_II_L;
+        }
+
+        if (isInThirdRegionHigh(normalizedState, derived)) {
+            return Region.CASE_III_H;
+        }
+
+        return Region.CASE_III_L;
+    }
+
+    struct NextReserveValueVars {
+        uint256 ya;
+        uint256 r;
+        Region region;
+        uint256 u;
+        uint256 theta;
+    }
+
+    function computeAnchoredReserveValue(
+        State memory normalizedState,
+        Params memory params,
+        DerivedParams memory derived
+    ) internal pure returns (uint256) {
+        NextReserveValueVars memory vars;
+
+        Region region = computeReserveValueRegion(normalizedState, params, derived);
+
+        vars.ya = ONE;
+        vars.r = normalizedState.reserveValue.divDown(normalizedState.totalGyroSupply);
+        vars.u = ONE - vars.r;
+        vars.theta = ONE - params.thetaBar;
+
+        if (region == Region.CASE_i) {
+            return normalizedState.reserveValue + normalizedState.redemptionLevel;
+        }
+
+        if (region == Region.CASE_I_ii) {
+            uint256 xDiff = normalizedState.redemptionLevel - params.xuBar;
+            return (normalizedState.reserveValue +
+                normalizedState.redemptionLevel -
+                (params.alphaBar * xDiff.squareDown()) /
+                TWO);
+        }
+
+        if (region == Region.CASE_I_iii)
+            return
+                vars.ya -
+                (vars.ya - params.xuBar).mulDown(vars.u) +
+                (vars.u**2 / (2 * params.alphaBar));
+
+        if (region == Region.CASE_II_H) {
+            uint256 delta = (params.alphaBar *
+                (vars.u.divDown(params.alphaBar) + (normalizedState.totalGyroSupply / 2))
+                    .squareDown()) / TWO;
+            return vars.ya - delta;
+        }
+
+        if (region == Region.CASE_II_L) {
+            uint256 p = vars.theta.mulDown(
+                vars.theta.divDown(2 * params.alphaBar) + normalizedState.totalGyroSupply
+            );
+            uint256 d = 2 *
+                (vars.theta**2 / params.alphaBar).mulDown(
+                    normalizedState.reserveValue -
+                        normalizedState.totalGyroSupply.mulDown(params.thetaBar)
+                );
+            return vars.ya + d.sqrt() - p;
+        }
+
+        if (region == Region.CASE_III_H) {
+            uint256 delta = (normalizedState.totalGyroSupply - normalizedState.reserveValue)
+                .divDown((ONE - normalizedState.redemptionLevel.squareDown()));
+            return vars.ya - delta;
+        }
+
+        if (region == Region.CASE_III_L) {
+            uint256 p = (normalizedState.totalGyroSupply -
+                normalizedState.reserveValue +
+                vars.theta) / 2;
+            uint256 q = (normalizedState.totalGyroSupply - normalizedState.reserveValue).mulDown(
+                vars.theta
+            ) + vars.theta.squareDown().mulDown(normalizedState.redemptionLevel.squareDown()) / 4;
+            uint256 delta = p - (p.squareDown() - q).sqrt();
+            return vars.ya - delta;
+        }
+
+        revert("unknown region");
+    }
+
+    function computeRedeemAmount(
+        State memory state,
+        Params memory params,
+        DerivedParams memory derived,
+        uint256 amount
+    ) internal pure returns (uint256) {
+        State memory normalizedState;
+        uint256 ya = state.totalGyroSupply + state.redemptionLevel;
+
+        normalizedState.redemptionLevel = state.redemptionLevel.divDown(ya);
+        normalizedState.reserveValue = state.reserveValue.divDown(ya);
+        normalizedState.totalGyroSupply = state.totalGyroSupply.divDown(ya);
+
+        uint256 normalizedNav = normalizedState.reserveValue.divDown(
+            normalizedState.totalGyroSupply
+        );
+
+        if (normalizedNav >= ONE) {
+            return amount;
+        }
+
+        if (normalizedNav <= params.thetaBar) {
+            uint256 nav = state.reserveValue.divDown(state.totalGyroSupply);
+            return nav.mulDown(amount);
+        }
+
+        uint256 normalizedAnchoredReserveValue = computeAnchoredReserveValue(
+            normalizedState,
+            params,
+            derived
+        );
+        uint256 anchoredReserveValue = normalizedAnchoredReserveValue.mulDown(ya);
+
+        uint256 nextReserveValue = computeReserve(
+            state.redemptionLevel + amount,
+            anchoredReserveValue,
+            ya,
+            params
+        );
+        // we are redeeming so the next reserve value must be smaller than the current one
+        return state.reserveValue - nextReserveValue;
+    }
+
+    /// @notice Returns the USD value to mint given an ammount of Gyro dollars
+    function computeMintAmount(uint256 usdAmount, uint256) external pure returns (uint256) {
+        return usdAmount;
+    }
+
+    /// @notice Records and returns the USD value to mint given an ammount of Gyro dollars
+    function mint(uint256 usdAmount, uint256) external view onlyMotherboard returns (uint256) {
+        return usdAmount;
+    }
+
+    /// @notice Computes the USD value to redeem given an ammount of Gyro dollars
+    function computeRedeemAmount(uint256 gydAmount, uint256 reserveUSDValue)
+        external
+        view
+        returns (uint256)
+    {
+        if (gydAmount == 0) return 0;
+        Params memory params = systemParams;
+        DerivedParams memory derived = createDerivedParams(params);
+        State memory currentState = computeStartingRedeemState(reserveUSDValue, params);
+        return computeRedeemAmount(currentState, params, derived, gydAmount);
+    }
+
+    function computeStartingRedeemState(uint256 reserveUSDValue, Params memory params)
+        internal
+        view
+        returns (State memory currentState)
+    {
+        return
+            State({
+                reserveValue: reserveUSDValue,
+                redemptionLevel: Flow.updateFlow(
+                    redemptionLevel,
+                    block.number,
+                    lastRedemptionBlock,
+                    params.outflowMemory
+                ),
+                totalGyroSupply: _getGyroSupply()
+            });
+    }
+
+    /// @notice Computes and records the USD value to redeem given an ammount of Gyro dollars
+    // NB reserveValue does not need to be stored as part of state - could be passed around
+    function redeem(uint256 gydAmount, uint256 reserveUSDValue)
+        public
+        onlyMotherboard
+        returns (uint256)
+    {
+        if (gydAmount == 0) return 0;
+        Params memory params = systemParams;
+        State memory currentState = computeStartingRedeemState(reserveUSDValue, params);
+        DerivedParams memory derived = createDerivedParams(params);
+        uint256 redeemAmount = computeRedeemAmount(currentState, params, derived, gydAmount);
+
+        redemptionLevel = currentState.redemptionLevel + gydAmount;
+        lastRedemptionBlock = block.number;
+
+        return redeemAmount;
+    }
+
+    function _getGyroSupply() internal view virtual returns (uint256) {
+        return gyroConfig.getGYDToken().totalSupply();
+    }
+}
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+/**
+ * @dev Provides information about the current execution context, including the
+ * sender of the transaction and its data. While these are generally available
+ * via msg.sender and msg.data, they should not be accessed in such a direct
+ * manner, since when dealing with meta-transactions the account sending and
+ * paying for execution may not be the actual sender (as far as an application
+ * is concerned).
+ *
+ * This contract is only required for intermediate, library-like contracts.
+ */
+abstract contract Context {
+    function _msgSender() internal view virtual returns (address) {
+        return msg.sender;
+    }
+
+    function _msgData() internal view virtual returns (bytes calldata) {
+        return msg.data;
+    }
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "DataTypes.sol";
+import "Governable.sol";
+
+/// @title IPAMM is the pricing contract for the Primary Market
+interface IPAMM {
+    /// @notice this event is emitted when the system parameters are updated
+    event SystemParamsUpdated(uint64 alphaBar, uint64 xuBar, uint64 thetaBar, uint64 outflowMemory);
+
+    // NB gas optimization, don't need to use uint64
+    struct Params {
+        uint64 alphaBar; // ᾱ ∊ [0,1]
+        uint64 xuBar; // x̄_U ∊ [0,1]
+        uint64 thetaBar; // θ̄ ∊ [0,1]
+        uint64 outflowMemory; // this is [0,1]
+    }
+
+    /// @notice Quotes the amount of GYD to mint for the given USD amount
+    /// @param usdAmount the USD value to add to the reserve
+    /// @param reserveUSDValue the current USD value of the reserve
+    /// @return the amount of GYD to mint
+    function computeMintAmount(uint256 usdAmount, uint256 reserveUSDValue)
+        external
+        view
+        returns (uint256);
+
+    /// @notice Quotes and records the amount of GYD to mint for the given USD amount.
+    /// NB that reserveUSDValue is added here to future proof the implementation
+    /// @param usdAmount the USD value to add to the reserve
+    /// @return the amount of GYD to mint
+    function mint(uint256 usdAmount, uint256 reserveUSDValue) external returns (uint256);
+
+    /// @notice Quotes the output USD value given an amount of GYD
+    /// @param gydAmount the amount GYD to redeem
+    /// @return the USD value to redeem
+    function computeRedeemAmount(uint256 gydAmount, uint256 reserveUSDValue)
+        external
+        view
+        returns (uint256);
+
+    /// @notice Quotes and records the output USD value given an amount of GYD
+    /// @param gydAmount the amount GYD to redeem
+    /// @return the USD value to redeem
+    function redeem(uint256 gydAmount, uint256 reserveUSDValue) external returns (uint256);
+
+    /// @notice Allows for the system parameters to be updated
+    function setSystemParams(Params memory params) external;
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+/// @notice Contains the data structures to express token routing
+library DataTypes {
+    /// @notice Contains a token and the amount associated with it
+    struct MonetaryAmount {
+        address tokenAddress;
+        uint256 amount;
+    }
+
+    /// @notice Contains a token and the price associated with it
+    struct PricedToken {
+        address tokenAddress;
+        bool isStable;
+        uint256 price;
+    }
+
+    /// @notice A route from/to a token to a vault
+    /// This is used to determine in which vault the token should be deposited
+    /// or from which vault it should be withdrawn
+    struct TokenToVaultMapping {
+        address inputToken;
+        address vault;
+    }
+
+    /// @notice Asset used to mint
+    struct MintAsset {
+        address inputToken;
+        uint256 inputAmount;
+        address destinationVault;
+    }
+
+    /// @notice Asset to redeem
+    struct RedeemAsset {
+        address outputToken;
+        uint256 minOutputAmount;
+        uint256 valueRatio;
+        address originVault;
+    }
+
+    /// @notice Persisted metadata about the vault
+    struct PersistedVaultMetadata {
+        uint256 initialPrice;
+        uint256 initialWeight;
+        uint256 shortFlowMemory;
+        uint256 shortFlowThreshold;
+    }
+
+    /// @notice Directional (in or out) flow data for the vaults
+    struct DirectionalFlowData {
+        uint128 shortFlow;
+        uint64 lastSafetyBlock;
+        uint64 lastSeenBlock;
+    }
+
+    /// @notice Bidirectional vault flow data
+    struct FlowData {
+        DirectionalFlowData inFlow;
+        DirectionalFlowData outFlow;
+    }
+
+    /// @notice Vault flow direction
+    enum Direction {
+        In,
+        Out,
+        Both
+    }
+
+    /// @notice Vault address and direction for Oracle Guardian
+    struct GuardedVaults {
+        address vaultAddress;
+        Direction direction;
+    }
+
+    /// @notice Vault with metadata
+    struct VaultInfo {
+        address vault;
+        uint8 decimals;
+        address underlying;
+        uint256 price;
+        PersistedVaultMetadata persistedMetadata;
+        uint256 reserveBalance;
+        uint256 currentWeight;
+        uint256 idealWeight;
+        PricedToken[] pricedTokens;
+    }
+
+    /// @notice Vault metadata
+    struct VaultMetadata {
+        address vault;
+        uint256 idealWeight;
+        uint256 currentWeight;
+        uint256 resultingWeight;
+        uint256 price;
+        bool allStablecoinsOnPeg;
+        bool atLeastOnePriceLargeEnough;
+        bool vaultWithinEpsilon;
+        PricedToken[] pricedTokens;
+    }
+
+    /// @notice Metadata to contain vaults metadata
+    struct Metadata {
+        VaultMetadata[] vaultMetadata;
+        bool allVaultsWithinEpsilon;
+        bool allStablecoinsAllVaultsOnPeg;
+        bool allVaultsUsingLargeEnoughPrices;
+        bool mint;
+    }
+
+    /// @notice Mint or redeem order struct
+    struct Order {
+        VaultWithAmount[] vaultsWithAmount;
+        bool mint;
+    }
+
+    /// @notice Vault info with associated amount for order operation
+    struct VaultWithAmount {
+        VaultInfo vaultInfo;
+        uint256 amount;
+    }
+
+    /// @notice state of the reserve (i.e., all the vaults)
+    struct ReserveState {
+        uint256 totalUSDValue;
+        VaultInfo[] vaults;
+    }
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "IGovernable.sol";
+
+/// @notice IGyroConfig stores the global configuration of the Gyroscope protocol
+interface IGyroConfig is IGovernable {
+    /// @notice Event emitted every time a configuration is changed
+    event ConfigChanged(bytes32 key, uint256 previousValue, uint256 newValue);
+    event ConfigChanged(bytes32 key, address previousValue, address newValue);
+
+    /// @notice Event emitted when a configuration is unset
+    event ConfigUnset(bytes32 key);
+
+    /// @notice Event emitted when a configuration is frozen
+    event ConfigFrozen(bytes32 key);
+
+    /// @notice Returns a set of known configuration keys
+    function listKeys() external view returns (bytes32[] memory);
+
+    /// @notice Returns true if the configuration has the given key
+    function hasKey(bytes32 key) external view returns (bool);
+
+    /// @notice Returns the metadata associated with a particular config key
+    function getConfigMeta(bytes32 key) external view returns (uint8, bool);
+
+    /// @notice Returns a uint256 value from the config
+    function getUint(bytes32 key) external view returns (uint256);
+
+    /// @notice Returns a uint256 value from the config or `defaultValue` if it does not exist
+    function getUint(bytes32 key, uint256 defaultValue) external view returns (uint256);
+
+    /// @notice Returns an address value from the config
+    function getAddress(bytes32 key) external view returns (address);
+
+    /// @notice Returns an address value from the config or `defaultValue` if it does not exist
+    function getAddress(bytes32 key, address defaultValue) external view returns (address);
+
+    /// @notice Set a uint256 config
+    /// NOTE: We avoid overloading to avoid complications with some clients
+    function setUint(bytes32 key, uint256 newValue) external;
+
+    /// @notice Set an address config
+    function setAddress(bytes32 key, address newValue) external;
+
+    /// @notice Unset a key in the config
+    function unset(bytes32 key) external;
+
+    /// @notice Freezes a key, making it impossible to update or unset
+    function freeze(bytes32 key) external;
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "FixedPoint.sol";
+
+library Flow {
+    using FixedPoint for uint256;
+
+    // This function calculates an exponential moving sum based on memoryParam
+    function updateFlow(
+        uint256 flowHistory,
+        uint256 currentBlock,
+        uint256 lastSeenBlock,
+        uint256 memoryParam
+    ) internal pure returns (uint256) {
+        if (lastSeenBlock == currentBlock || flowHistory == 0) {
+            return flowHistory;
+        } else if (lastSeenBlock < currentBlock) {
+            uint256 blockDifference = currentBlock - lastSeenBlock;
+            uint256 memoryParamRaised = memoryParam.intPowDown(blockDifference);
+            return flowHistory.mulDown(memoryParamRaised);
+        }
+        revert(Errors.INVALID_ARGUMENT);
+    }
+}
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import "IERC165.sol";
+
+/**
+ * @dev Required interface of an ERC721 compliant contract.
+ */
+interface IERC721 is IERC165 {
+    /**
+     * @dev Emitted when `tokenId` token is transferred from `from` to `to`.
+     */
+    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
+
+    /**
+     * @dev Emitted when `owner` enables `approved` to manage the `tokenId` token.
+     */
+    event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
+
+    /**
+     * @dev Emitted when `owner` enables or disables (`approved`) `operator` to manage all of its assets.
+     */
+    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+
+    /**
+     * @dev Returns the number of tokens in ``owner``'s account.
+     */
+    function balanceOf(address owner) external view returns (uint256 balance);
+
+    /**
+     * @dev Returns the owner of the `tokenId` token.
+     *
+     * Requirements:
+     *
+     * - `tokenId` must exist.
+     */
+    function ownerOf(uint256 tokenId) external view returns (address owner);
+
+    /**
+     * @dev Safely transfers `tokenId` token from `from` to `to`, checking first that contract recipients
+     * are aware of the ERC721 protocol to prevent tokens from being forever locked.
+     *
+     * Requirements:
+     *
+     * - `from` cannot be the zero address.
+     * - `to` cannot be the zero address.
+     * - `tokenId` token must exist and be owned by `from`.
+     * - If the caller is not `from`, it must be have been allowed to move this token by either {approve} or {setApprovalForAll}.
+     * - If `to` refers to a smart contract, it must implement {IERC721Receiver-onERC721Received}, which is called upon a safe transfer.
+     *
+     * Emits a {Transfer} event.
+     */
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId
+    ) external;
+
+    /**
+     * @dev Transfers `tokenId` token from `from` to `to`.
+     *
+     * WARNING: Usage of this method is discouraged, use {safeTransferFrom} whenever possible.
+     *
+     * Requirements:
+     *
+     * - `from` cannot be the zero address.
+     * - `to` cannot be the zero address.
+     * - `tokenId` token must be owned by `from`.
+     * - If the caller is not `from`, it must be approved to move this token by either {approve} or {setApprovalForAll}.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transferFrom(
+        address from,
+        address to,
+        uint256 tokenId
+    ) external;
+
+    /**
+     * @dev Gives permission to `to` to transfer `tokenId` token to another account.
+     * The approval is cleared when the token is transferred.
+     *
+     * Only a single account can be approved at a time, so approving the zero address clears previous approvals.
+     *
+     * Requirements:
+     *
+     * - The caller must own the token or be an approved operator.
+     * - `tokenId` must exist.
+     *
+     * Emits an {Approval} event.
+     */
+    function approve(address to, uint256 tokenId) external;
+
+    /**
+     * @dev Returns the account approved for `tokenId` token.
+     *
+     * Requirements:
+     *
+     * - `tokenId` must exist.
+     */
+    function getApproved(uint256 tokenId) external view returns (address operator);
+
+    /**
+     * @dev Approve or remove `operator` as an operator for the caller.
+     * Operators can call {transferFrom} or {safeTransferFrom} for any token owned by the caller.
+     *
+     * Requirements:
+     *
+     * - The `operator` cannot be the caller.
+     *
+     * Emits an {ApprovalForAll} event.
+     */
+    function setApprovalForAll(address operator, bool _approved) external;
+
+    /**
+     * @dev Returns if the `operator` is allowed to manage all of the assets of `owner`.
+     *
+     * See {setApprovalForAll}
+     */
+    function isApprovedForAll(address owner, address operator) external view returns (bool);
+
+    /**
+     * @dev Safely transfers `tokenId` token from `from` to `to`.
+     *
+     * Requirements:
+     *
+     * - `from` cannot be the zero address.
+     * - `to` cannot be the zero address.
+     * - `tokenId` token must exist and be owned by `from`.
+     * - If the caller is not `from`, it must be approved to move this token by either {approve} or {setApprovalForAll}.
+     * - If `to` refers to a smart contract, it must implement {IERC721Receiver-onERC721Received}, which is called upon a safe transfer.
+     *
+     * Emits a {Transfer} event.
+     */
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId,
+        bytes calldata data
+    ) external;
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "DataTypes.sol";
+
+import "IGyroVault.sol";
+
+interface IBatchVaultPriceOracle {
+    event BatchPriceOracleChanged(address indexed priceOracle);
+    event VaultPriceOracleChanged(Vaults.Type indexed vaultType, address indexed priceOracle);
+
+    /// @notice Fetches the price of the vault token as well as the underlying tokens
+    /// @return the same vaults info with the price data populated
+    function fetchPricesUSD(DataTypes.VaultInfo[] memory vaultsInfo)
+        external
+        view
+        returns (DataTypes.VaultInfo[] memory);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "Vaults.sol";
+
+import "IERC20Metadata.sol";
+
+/// @notice A vault is one of the component of the reserve and has a one-to-one
+/// mapping to an underlying pool (e.g. Balancer pool, Curve pool, Uniswap pool...)
+/// It is itself an ERC-20 token that is used to track the ownership of the LP tokens
+/// deposited in the vault
+/// A vault can be associated with a strategy to generate yield on the deposited funds
+interface IGyroVault is IERC20Metadata {
+    /// @return The type of the vault
+    function vaultType() external view returns (Vaults.Type);
+
+    /// @return The token associated with this vault
+    /// This can be any type of token but will likely be an LP token in practice
+    function underlying() external view returns (address);
+
+    /// @return The token associated with this vault
+    /// In the case of an LP token, this will be the underlying tokens
+    /// associated to it (e.g. [ETH, DAI] for a ETH/DAI pool LP token or [USDC] for aUSDC)
+    /// In most cases, the tokens returned will not be LP tokens
+    function getTokens() external view returns (IERC20[] memory);
+
+    /// @return The total amount of underlying tokens in the vault
+    function totalUnderlying() external view returns (uint256);
+
+    /// @return The exchange rate between an underlying tokens and the token of this vault
+    function exchangeRate() external view returns (uint256);
+
+    /// @notice Deposits `underlyingAmount` of LP token supported
+    /// and sends back the received vault tokens
+    /// @param underlyingAmount the amount of underlying to deposit
+    /// @return vaultTokenAmount the amount of vault token sent back
+    function deposit(uint256 underlyingAmount, uint256 minVaultTokensOut)
+        external
+        returns (uint256 vaultTokenAmount);
+
+    /// @notice Simlar to `deposit(uint256 underlyingAmount)` but credits the tokens
+    /// to `beneficiary` instead of `msg.sender`
+    function depositFor(
+        address beneficiary,
+        uint256 underlyingAmount,
+        uint256 minVaultTokensOut
+    ) external returns (uint256 vaultTokenAmount);
+
+    /// @notice Dry-run version of deposit
+    function dryDeposit(uint256 underlyingAmount, uint256 minVaultTokensOut)
+        external
+        view
+        returns (uint256 vaultTokenAmount, string memory error);
+
+    /// @notice Withdraws `vaultTokenAmount` of LP token supported
+    /// and burns the vault tokens
+    /// @param vaultTokenAmount the amount of vault token to withdraw
+    /// @return underlyingAmount the amount of LP token sent back
+    function withdraw(uint256 vaultTokenAmount, uint256 minUnderlyingOut)
+        external
+        returns (uint256 underlyingAmount);
+
+    /// @notice Dry-run version of `withdraw`
+    function dryWithdraw(uint256 vaultTokenAmount, uint256 minUnderlyingOut)
+        external
+        view
+        returns (uint256 underlyingAmount, string memory error);
+
+    /// @return The address of the current strategy used by the vault
+    function strategy() external view returns (address);
+
+    /// @notice Sets the address of the strategy to use for this vault
+    /// This will be used through governance
+    /// @param strategyAddress the address of the strategy contract that should follow the `IStrategy` interface
+    function setStrategy(address strategyAddress) external;
+
+    /// @return the block at which the vault has been deployed
+    function deployedAt() external view returns (uint256);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+library Vaults {
+    enum Type {
+        GENERIC,
+        BALANCER_CPMM,
+        BALANCER_2CLP,
+        BALANCER_3CLP,
+        BALANCER_ECLP
+    }
+}
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import "IERC20.sol";
+
+/**
+ * @dev Interface for the optional metadata functions from the ERC20 standard.
+ *
+ * _Available since v4.1._
+ */
+interface IERC20Metadata is IERC20 {
+    /**
+     * @dev Returns the name of the token.
+     */
+    function name() external view returns (string memory);
+
+    /**
+     * @dev Returns the symbol of the token.
+     */
+    function symbol() external view returns (string memory);
+
+    /**
+     * @dev Returns the decimals places of the token.
+     */
+    function decimals() external view returns (uint8);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "IGyroConfig.sol";
+import "IGYDToken.sol";
+import "IReserve.sol";
+import "IPAMM.sol";
+import "IFeeBank.sol";
+
+/// @title IMotherboard is the central contract connecting the different pieces
+/// of the Gyro protocol
+interface IMotherboard {
+    /// @dev The GYD token is not upgradable so this will always return the same value
+    /// @return the address of the GYD token
+    function gydToken() external view returns (IGYDToken);
+
+    /// @notice Returns the address for the PAMM
+    /// @return the PAMM address
+    function pamm() external view returns (IPAMM);
+
+    /// @notice Returns the address for the reserve
+    /// @return the address of the reserve
+    function reserve() external view returns (IReserve);
+
+    /// @notice Returns the address of the global configuration
+    /// @return the global configuration address
+    function gyroConfig() external view returns (IGyroConfig);
+
+    /// @notice Main minting function to be called by a depositor
+    /// This mints using the exact input amount and mints at least `minMintedAmount`
+    /// All the `inputTokens` should be approved for the motherboard to spend at least
+    /// `inputAmounts` on behalf of the sender
+    /// @param assets the assets and associated amounts used to mint GYD
+    /// @param minReceivedAmount the minimum amount of GYD to be minted
+    /// @return mintedGYDAmount GYD token minted amount
+    function mint(DataTypes.MintAsset[] calldata assets, uint256 minReceivedAmount)
+        external
+        returns (uint256 mintedGYDAmount);
+
+    /// @notice Main redemption function to be called by a withdrawer
+    /// This redeems using at most `maxRedeemedAmount` of GYD and returns the
+    /// exact outputs as specified by `tokens` and `amounts`
+    /// @param gydToRedeem the maximum amount of GYD to redeem
+    /// @param assets the output tokens and associated amounts to return against GYD
+    /// @return outputAmounts the amounts receivd against the redeemed GYD
+    function redeem(uint256 gydToRedeem, DataTypes.RedeemAsset[] calldata assets)
+        external
+        returns (uint256[] memory outputAmounts);
+
+    /// @notice Simulates a mint to know whether it would succeed and how much would be minted
+    /// The parameters are the same as the `mint` function
+    /// @param assets the assets and associated amounts used to mint GYD
+    /// @param minReceivedAmount the minimum amount of GYD to be minted
+    /// @param account the account that wants to mint
+    /// @return mintedGYDAmount the amount that would be minted, or 0 if it an error would occur
+    /// @return err a non-empty error message in case an error would happen when minting
+    function dryMint(DataTypes.MintAsset[] calldata assets, uint256 minReceivedAmount, address account)
+        external
+        returns (uint256 mintedGYDAmount, string memory err);
+
+    /// @notice Dry version of the `redeem` function
+    /// exact outputs as specified by `tokens` and `amounts`
+    /// @param gydToRedeem the maximum amount of GYD to redeem
+    /// @param assets the output tokens and associated amounts to return against GYD
+    /// @return outputAmounts the amounts receivd against the redeemed GYD
+    /// @return err a non-empty error message in case an error would happen when redeeming
+    function dryRedeem(uint256 gydToRedeem, DataTypes.RedeemAsset[] memory assets)
+        external
+        returns (uint256[] memory outputAmounts, string memory err);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "IERC20.sol";
+
+/// @notice IGYDToken is the GYD token contract
+interface IGYDToken is IERC20 {
+    /// @notice Set the address allowed to mint new GYD tokens
+    /// @dev This should typically be the motherboard that will mint or burn GYD tokens
+    /// when user interact with it
+    /// @param _minter the address of the authorized minter
+    function setMinter(address _minter) external;
+
+    /// @notice Gets the address for the minter contract
+    /// @return the address of the minter contract
+    function minter() external returns (address);
+
+    /// @notice Mints `amount` of GYD token for `account`
+    function mint(address account, uint256 amount) external;
+
+    /// @notice Burns `amount` of GYD token
+    function burn(uint256 amount) external;
+
+    /// @notice Burns `amount` of GYD token from `account`
+    function burnFrom(address account, uint256 amount) external;
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+/// @notice IReserve allows an authorized contract to deposit and withdraw tokens
+interface IReserve {
+    event Deposit(address indexed from, address indexed token, uint256 amount);
+    event Withdraw(address indexed from, address indexed token, uint256 amount);
+
+    event ManagerAdded(address indexed manager);
+    event ManagerRemoved(address indexed manager);
+
+    /// @notice the address of the reserve managers, the only entities allowed to withdraw
+    /// from this reserve
+    function managers() external view returns (address[] memory);
+
+    /// @notice Adds a manager, who will be allowed to withdraw from this reserve
+    function addManager(address manager) external;
+
+    /// @notice Removes manager
+    function removeManager(address manager) external;
+
+    /// @notice Deposits vault tokens in the reserve
+    /// @param token address of the vault tokens
+    /// @param amount amount of the vault tokens to deposit
+    function depositToken(address token, uint256 amount) external;
+
+    /// @notice Withdraws vault tokens from the reserve
+    /// @param token address of the vault tokens
+    /// @param amount amount of the vault tokens to deposit
+    function withdrawToken(address token, uint256 amount) external;
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "IGovernable.sol";
+
+/// @notice IFeeBank is where the fees will be stored
+interface IFeeBank is IGovernable {
+    /// @notice Deposits `amount` of `underlying` in the fee bank
+    /// @dev the fee bank should be approved to spend at least `amount` of `underlying`
+    function depositFees(address underlying, uint256 amount) external;
+
+    /// @notice Withdraws `amount` of `underlying` from the fee bank to `beneficiary`
+    function withdrawFees(
+        address underlying,
+        address beneficiary,
+        uint256 amount
+    ) external;
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "DataTypes.sol";
+
+interface ISafetyCheck {
+    /// @notice Checks whether a mint operation is safe
+    /// @return empty string if it is safe, otherwise the reason why it is not safe
+    function isMintSafe(DataTypes.Order memory order) external view returns (string memory);
+
+    /// @notice Checks whether a redeem operation is safe
+    /// @return empty string if it is safe, otherwise the reason why it is not safe
+    function isRedeemSafe(DataTypes.Order memory order) external view returns (string memory);
+
+    /// @notice Checks whether a redeem operation is safe and reverts otherwise
+    /// This is only called when an actual redeem is performed
+    /// The implementation should store any relevant information for the redeem
+    function checkAndPersistRedeem(DataTypes.Order memory order) external;
+
+    /// @notice Checks whether a mint operation is safe and reverts otherwise
+    /// This is only called when an actual mint is performed
+    /// The implementation should store any relevant information for the mint
+    function checkAndPersistMint(DataTypes.Order memory order) external;
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "DataTypes.sol";
+
+interface IVaultRegistry {
+    event VaultRegistered(address indexed vault);
+    event VaultDeregistered(address indexed vault);
+
+    /// @notice Returns the metadata for the given vault
+    function getVaultMetadata(address vault)
+        external
+        view
+        returns (DataTypes.PersistedVaultMetadata memory);
+
+    /// @notice Get the list of all vaults
+    function listVaults() external view returns (address[] memory);
+
+    /// @notice Registers a new vault
+    function registerVault(address vault, DataTypes.PersistedVaultMetadata memory) external;
+
+    /// @notice Deregister a vault
+    function deregisterVault(address vault) external;
+
+    /// @notice sets the initial price of a vault
+    function setInitialPrice(address vault, uint256 initialPrice) external;
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+interface IAssetRegistry {
+    /// @notice Emitted when an asset address is updated
+    /// If `previousAddress` was 0, it means that the asset was added to the registry
+    event AssetAddressUpdated(
+        string indexed assetName,
+        address indexed previousAddress,
+        address indexed newAddress
+    );
+
+    /// @notice Emitted when an asset is set as being stable
+    event StableAssetAdded(address indexed asset);
+
+    /// @notice Emitted when an asset is unset as being stable
+    event StableAssetRemoved(address indexed asset);
+
+    /// @notice Returns the address associated with the given asset name
+    /// e.g. "DAI" -> 0x6B175474E89094C44Da98b954EedeAC495271d0F
+    function getAssetAddress(string calldata assetName) external view returns (address);
+
+    /// @notice Returns a list of names for the registered assets
+    /// The asset are encoded as bytes32 (big endian) rather than string
+    function getRegisteredAssetNames() external view returns (bytes32[] memory);
+
+    /// @notice Returns a list of addresses for the registered assets
+    function getRegisteredAssetAddresses() external view returns (address[] memory);
+
+    /// @notice Returns a list of addresses contaning the stable assets
+    function getStableAssets() external view returns (address[] memory);
+
+    /// @return true if the asset name is registered
+    function isAssetNameRegistered(string calldata assetName) external view returns (bool);
+
+    /// @return true if the asset address is registered
+    function isAssetAddressRegistered(address assetAddress) external view returns (bool);
+
+    /// @return true if the asset name is stable
+    function isAssetStable(address assetAddress) external view returns (bool);
+
+    /// @notice Adds a stable asset to the registry
+    /// The asset must already be registered in the registry
+    function addStableAsset(address assetAddress) external;
+
+    /// @notice Removes a stable asset to the registry
+    /// The asset must already be a stable asset
+    function removeStableAsset(address asset) external;
+
+    /// @notice Set the `assetName` to the given `assetAddress`
+    function setAssetAddress(string memory assetName, address assetAddress) external;
+
+    /// @notice Removes `assetName` from the registry
+    function removeAsset(string memory assetName) external;
+}
+
+
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "IVaultWeightManager.sol";
+import "IUSDPriceOracle.sol";
+import "DataTypes.sol";
+
+interface IReserveManager {
+    event NewVaultWeightManager(address indexed oldManager, address indexed newManager);
+    event NewPriceOracle(address indexed oldOracle, address indexed newOracle);
+
+    /// @notice Returns a list of vaults including metadata such as price and weights
+    function getReserveState() external view returns (DataTypes.ReserveState memory);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+interface IVaultWeightManager {
+    /// @notice Retrieves the weight of the given vault
+    function getVaultWeight(address _vault) external view returns (uint256);
+
+    /// @notice Retrieves the weights of the given vaults
+    function getVaultWeights(address[] calldata _vaults) external view returns (uint256[] memory);
+
+    /// @notice Sets the weight of the given vault
+    function setVaultWeight(address _vault, uint256 _weight) external;
+}
+
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+interface IUSDPriceOracle {
+    /// @notice Quotes the USD price of `tokenAddress`
+    /// The quoted price is always scaled with 18 decimals regardless of the
+    /// source used for the oracle.
+    /// @param tokenAddress the asset of which the price is to be quoted
+    /// @return the USD price of the asset
+    function getPriceUSD(address tokenAddress) external view returns (uint256);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "DataTypes.sol";
+
+interface IFeeHandler {
+    /// @return an order with the fees applied
+    function applyFees(DataTypes.Order memory order) external view returns (DataTypes.Order memory);
+
+    /// @return if the given vault is supported
+    function isVaultSupported(address vaultAddress) external view returns (bool);
+}
+
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.4;
+
+/// @notice ICapAuthentication handles cap authentication for the capped protocol
+interface ICapAuthentication {
+    /// @return `true` if the account is authenticated
+    function isAuthenticated(address account) external view returns (bool);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.10;
+
+import "SafeERC20.sol";
+import "ERC20.sol";
+
+import "Governable.sol";
+import "DataTypes.sol";
+import "DecimalScale.sol";
+import "FixedPoint.sol";
+import "IGyroVault.sol";
+import "IVault.sol";
+import "Errors.sol";
+import "ISafetyCheck.sol";
+
+contract ReserveSafetyManager is Governable, ISafetyCheck {
+    using FixedPoint for uint256;
+    using DecimalScale for uint256;
+
+    uint256 public maxAllowedVaultDeviation;
+    uint256 public stablecoinMaxDeviation;
+    uint256 public minTokenPrice;
+
+    /// @notice a stablecoin should be equal to 1 USD
+    uint256 public constant STABLECOIN_IDEAL_PRICE = 1e18;
+
+    constructor(
+        address _governor,
+        uint256 _maxAllowedVaultDeviation,
+        uint256 _stablecoinMaxDeviation,
+        uint256 _minTokenPrice
+    ) Governable(_governor) {
+        maxAllowedVaultDeviation = _maxAllowedVaultDeviation;
+        stablecoinMaxDeviation = _stablecoinMaxDeviation;
+        minTokenPrice = _minTokenPrice;
+    }
+
+    function setVaultMaxDeviation(uint256 _maxAllowedVaultDeviation) external governanceOnly {
+        maxAllowedVaultDeviation = _maxAllowedVaultDeviation;
+    }
+
+    function setMinTokenPrice(uint256 _minTokenPrice) external governanceOnly {
+        minTokenPrice = _minTokenPrice;
+    }
+
+    function setStablecoinMaxDeviation(uint256 _stablecoinMaxDeviation) external governanceOnly {
+        stablecoinMaxDeviation = _stablecoinMaxDeviation;
+    }
+
+    /// @notice For given token amounts and token prices, calculates the weight of each token with
+    /// respect to the quote price as well as the total value of the basket in terms of the quote price
+    /// @param amounts an array of token amounts
+    /// @param prices an array of prices
+    /// @return (weights, total) where the weights is an array and the total a uint
+    function _calculateWeightsAndTotal(uint256[] memory amounts, uint256[] memory prices)
+        internal
+        pure
+        returns (uint256[] memory, uint256)
+    {
+        uint256[] memory weights = new uint256[](prices.length);
+
+        uint256 total = 0;
+        for (uint256 i = 0; i < amounts.length; i++) {
+            uint256 amountInUSD = amounts[i].mulDown(prices[i]);
+            total += amountInUSD;
+        }
+
+        if (total == 0) {
+            return (weights, total);
+        }
+
+        for (uint256 i = 0; i < amounts.length; i++) {
+            weights[i] = amounts[i].mulDown(prices[i]).divDown(total);
+        }
+
+        return (weights, total);
+    }
+
+    /// @notice checks for all vaults whether if a particular vault contains a stablecoin that is off its peg,
+    /// whether the proposed change to the vault would be reducing the weight of the vault with the failed asset (as desired).
+    /// @param metaData an metadata struct containing all the vault information. Must be fully updated with the price
+    /// safety and epsilon data.
+    /// @return bool of whether all vaults exhibit this weight decreasing behavior
+    function _vaultWeightWithOffPegFalls(DataTypes.Metadata memory metaData)
+        internal
+        pure
+        returns (bool)
+    {
+        for (uint256 i; i < metaData.vaultMetadata.length; i++) {
+            DataTypes.VaultMetadata memory vaultData = metaData.vaultMetadata[i];
+
+            if (
+                !vaultData.allStablecoinsOnPeg &&
+                vaultData.resultingWeight >= vaultData.currentWeight
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function isRedeemFeasible(DataTypes.Order memory order) internal pure returns (bool) {
+        for (uint256 i = 0; i < order.vaultsWithAmount.length; i++) {
+            if (
+                order.vaultsWithAmount[i].vaultInfo.reserveBalance <
+                order.vaultsWithAmount[i].amount
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// @notice this function takes an order struct and builds the metadata struct, for use in this contract.
+    /// @param order an order struct received by the Reserve Safety Manager contract
+    /// @return metaData object
+    function _buildMetaData(DataTypes.Order memory order)
+        internal
+        pure
+        returns (DataTypes.Metadata memory metaData)
+    {
+        DataTypes.VaultWithAmount[] memory vaultsWithAmount = order.vaultsWithAmount;
+
+        metaData.mint = order.mint;
+        metaData.vaultMetadata = new DataTypes.VaultMetadata[](order.vaultsWithAmount.length);
+
+        uint256[] memory resultingAmounts = new uint256[](vaultsWithAmount.length);
+        uint256[] memory prices = new uint256[](vaultsWithAmount.length);
+
+        for (uint256 i = 0; i < vaultsWithAmount.length; i++) {
+            if (order.mint) {
+                resultingAmounts[i] =
+                    vaultsWithAmount[i].vaultInfo.reserveBalance +
+                    vaultsWithAmount[i].amount;
+            } else {
+                resultingAmounts[i] =
+                    vaultsWithAmount[i].vaultInfo.reserveBalance -
+                    vaultsWithAmount[i].amount;
+            }
+            resultingAmounts[i] = resultingAmounts[i].scaleFrom(
+                vaultsWithAmount[i].vaultInfo.decimals
+            );
+
+            metaData.vaultMetadata[i].vault = vaultsWithAmount[i].vaultInfo.vault;
+            metaData.vaultMetadata[i].idealWeight = vaultsWithAmount[i].vaultInfo.idealWeight;
+            metaData.vaultMetadata[i].currentWeight = vaultsWithAmount[i].vaultInfo.currentWeight;
+            metaData.vaultMetadata[i].price = vaultsWithAmount[i].vaultInfo.price;
+            metaData.vaultMetadata[i].pricedTokens = vaultsWithAmount[i].vaultInfo.pricedTokens;
+            prices[i] = vaultsWithAmount[i].vaultInfo.price;
+        }
+
+        (uint256[] memory resultingWeights, ) = _calculateWeightsAndTotal(resultingAmounts, prices);
+
+        for (uint256 i = 0; i < order.vaultsWithAmount.length; i++) {
+            metaData.vaultMetadata[i].resultingWeight = resultingWeights[i];
+        }
+    }
+
+    /// @notice given input metadata, updates it with the information about whether the vault would remain within
+    /// an acceptable band (+/- epsilon) around the ideal weight for the vault.
+    /// @param metaData a metadata struct containing all the vault information.
+    function _updateMetaDataWithEpsilonStatus(DataTypes.Metadata memory metaData) internal view {
+        metaData.allVaultsWithinEpsilon = true;
+
+        for (uint256 i = 0; i < metaData.vaultMetadata.length; i++) {
+            DataTypes.VaultMetadata memory vaultData = metaData.vaultMetadata[i];
+            uint256 scaledEpsilon = vaultData.idealWeight.mulUp(maxAllowedVaultDeviation);
+            bool withinEpsilon = vaultData.idealWeight.absSub(vaultData.resultingWeight) <=
+                scaledEpsilon;
+
+            metaData.vaultMetadata[i].vaultWithinEpsilon = withinEpsilon;
+
+            if (!withinEpsilon) {
+                metaData.allVaultsWithinEpsilon = false;
+            }
+        }
+    }
+
+    /// @notice given input vaultMetadata, updates it with the information about whether the vault contains assets
+    /// with safe prices. For a stablecoin, safe means the asset is sufficiently close to the peg. For a
+    /// vault consisting of entirely non-stablecoin assets, this means that at least one of the prices is not 'dust',
+    /// to avoid numerical error.
+    /// @param vaultMetadata a VaultMetadata struct containing information for a particular vault.
+    function _updateVaultWithPriceSafety(DataTypes.VaultMetadata memory vaultMetadata)
+        internal
+        view
+    {
+        vaultMetadata.allStablecoinsOnPeg = true;
+        vaultMetadata.atLeastOnePriceLargeEnough = false;
+        for (uint256 i = 0; i < vaultMetadata.pricedTokens.length; i++) {
+            uint256 tokenPrice = vaultMetadata.pricedTokens[i].price;
+            bool isStable = vaultMetadata.pricedTokens[i].isStable;
+
+            if (isStable) {
+                vaultMetadata.atLeastOnePriceLargeEnough = true;
+                if (tokenPrice.absSub(STABLECOIN_IDEAL_PRICE) > stablecoinMaxDeviation) {
+                    vaultMetadata.allStablecoinsOnPeg = false;
+                }
+            } else if (tokenPrice >= minTokenPrice) {
+                vaultMetadata.atLeastOnePriceLargeEnough = true;
+            }
+        }
+    }
+
+    /// @notice given input metadata, updates it with the information about whether all vaults contains assets with
+    /// safe prices as determined by the _updateVaultWithPriceSafety function.
+    /// @param metaData a metadata struct containing all the vault information.
+    function _updateMetadataWithPriceSafety(DataTypes.Metadata memory metaData) internal view {
+        metaData.allStablecoinsAllVaultsOnPeg = true;
+        metaData.allVaultsUsingLargeEnoughPrices = true;
+        for (uint256 i = 0; i < metaData.vaultMetadata.length; i++) {
+            DataTypes.VaultMetadata memory vaultData = metaData.vaultMetadata[i];
+            _updateVaultWithPriceSafety(vaultData);
+            if (!vaultData.allStablecoinsOnPeg) {
+                metaData.allStablecoinsAllVaultsOnPeg = false;
+            }
+            if (!vaultData.atLeastOnePriceLargeEnough) {
+                metaData.allVaultsUsingLargeEnoughPrices = false;
+            }
+        }
+    }
+
+    /// @notice given input metadata,
+    /// @param metaData a metadata struct containing all the vault information, updated with price safety and the
+    /// status of the vault regarding whether it is within epsilon.
+    /// @return bool equal to true if for any pool that is outside of epsilon, the weight after the mint/redeem will
+    /// be closer to the ideal weight than the current weight is, i.e., the operation promotes rebalancing.
+    function _safeToExecuteOutsideEpsilon(DataTypes.Metadata memory metaData)
+        internal
+        pure
+        returns (bool)
+    {
+        //Check that amount above maxAllowedVaultDeviation is decreasing
+        //Check that unhealthy pools have input weight below ideal weight
+        //If both true, then mint
+        //note: should always be able to mint at the ideal weights!
+
+        for (uint256 i; i < metaData.vaultMetadata.length; i++) {
+            DataTypes.VaultMetadata memory vaultMetadata = metaData.vaultMetadata[i];
+
+            if (vaultMetadata.vaultWithinEpsilon) {
+                continue;
+            }
+
+            uint256 distanceResultingToIdeal = vaultMetadata.resultingWeight.absSub(
+                vaultMetadata.idealWeight
+            );
+            uint256 distanceCurrentToIdeal = vaultMetadata.currentWeight.absSub(
+                vaultMetadata.idealWeight
+            );
+
+            if (distanceResultingToIdeal >= distanceCurrentToIdeal) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// @inheritdoc ISafetyCheck
+    function isMintSafe(DataTypes.Order memory order) public view returns (string memory) {
+        DataTypes.Metadata memory metaData = _buildMetaData(order);
+
+        _updateMetadataWithPriceSafety(metaData);
+        _updateMetaDataWithEpsilonStatus(metaData);
+
+        if (!metaData.allVaultsUsingLargeEnoughPrices) {
+            return Errors.TOKEN_PRICES_TOO_SMALL;
+        }
+
+        bool stableCoinsSafe = metaData.allStablecoinsAllVaultsOnPeg ||
+            _vaultWeightWithOffPegFalls(metaData);
+        bool epsilonSafe = metaData.allVaultsWithinEpsilon ||
+            _safeToExecuteOutsideEpsilon(metaData);
+
+        if (stableCoinsSafe && epsilonSafe) {
+            return "";
+        }
+
+        return Errors.NOT_SAFE_TO_MINT;
+    }
+
+    /// @inheritdoc ISafetyCheck
+    function isRedeemSafe(DataTypes.Order memory order) public view returns (string memory) {
+        if (!isRedeemFeasible(order)) {
+            return Errors.TRYING_TO_REDEEM_MORE_THAN_VAULT_CONTAINS;
+        }
+
+        DataTypes.Metadata memory metaData = _buildMetaData(order);
+
+        _updateMetadataWithPriceSafety(metaData);
+        _updateMetaDataWithEpsilonStatus(metaData);
+
+        if (!metaData.allVaultsUsingLargeEnoughPrices) {
+            return Errors.TOKEN_PRICES_TOO_SMALL;
+        }
+
+        if (metaData.allVaultsWithinEpsilon || _safeToExecuteOutsideEpsilon(metaData)) {
+            return "";
+        }
+
+        return Errors.NOT_SAFE_TO_REDEEM;
+    }
+
+    /// @inheritdoc ISafetyCheck
+    function checkAndPersistMint(DataTypes.Order memory order) external view {
+        string memory err = isMintSafe(order);
+        require(bytes(err).length == 0, err);
+    }
+
+    /// @inheritdoc ISafetyCheck
+    function checkAndPersistRedeem(DataTypes.Order memory order) external view {
+        string memory err = isRedeemSafe(order);
+        require(bytes(err).length == 0, err);
+    }
+}
+
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import "IERC20.sol";
+import "Address.sol";
+
+/**
+ * @title SafeERC20
+ * @dev Wrappers around ERC20 operations that throw on failure (when the token
+ * contract returns false). Tokens that return no value (and instead revert or
+ * throw on failure) are also supported, non-reverting calls are assumed to be
+ * successful.
+ * To use this library you can add a `using SafeERC20 for IERC20;` statement to your contract,
+ * which allows you to call the safe operations as `token.safeTransfer(...)`, etc.
+ */
+library SafeERC20 {
+    using Address for address;
+
+    function safeTransfer(
+        IERC20 token,
+        address to,
+        uint256 value
+    ) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.transfer.selector, to, value));
+    }
+
+    function safeTransferFrom(
+        IERC20 token,
+        address from,
+        address to,
+        uint256 value
+    ) internal {
+        _callOptionalReturn(token, abi.encodeWithSelector(token.transferFrom.selector, from, to, value));
+    }
+
+    /**
+     * @dev Deprecated. This function has issues similar to the ones found in
+     * {IERC20-approve}, and its usage is discouraged.
+     *
+     * Whenever possible, use {safeIncreaseAllowance} and
+     * {safeDecreaseAllowance} instead.
+     */
+    function safeApprove(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+        // safeApprove should only be called when setting an initial allowance,
+        // or when resetting it to zero. To increase and decrease it, use
+        // 'safeIncreaseAllowance' and 'safeDecreaseAllowance'
+        require(
+            (value == 0) || (token.allowance(address(this), spender) == 0),
+            "SafeERC20: approve from non-zero to non-zero allowance"
+        );
+        _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, value));
+    }
+
+    function safeIncreaseAllowance(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+        uint256 newAllowance = token.allowance(address(this), spender) + value;
+        _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
+    }
+
+    function safeDecreaseAllowance(
+        IERC20 token,
+        address spender,
+        uint256 value
+    ) internal {
+        unchecked {
+            uint256 oldAllowance = token.allowance(address(this), spender);
+            require(oldAllowance >= value, "SafeERC20: decreased allowance below zero");
+            uint256 newAllowance = oldAllowance - value;
+            _callOptionalReturn(token, abi.encodeWithSelector(token.approve.selector, spender, newAllowance));
+        }
+    }
+
+    /**
+     * @dev Imitates a Solidity high-level call (i.e. a regular function call to a contract), relaxing the requirement
+     * on the return value: the return value is optional (but if data is returned, it must not be false).
+     * @param token The token targeted by the call.
+     * @param data The call data (encoded using abi.encode or one of its variants).
+     */
+    function _callOptionalReturn(IERC20 token, bytes memory data) private {
+        // We need to perform a low level call here, to bypass Solidity's return data size checking mechanism, since
+        // we're implementing it ourselves. We use {Address.functionCall} to perform this call, which verifies that
+        // the target address contains contract code and also asserts for success in the low-level call.
+
+        bytes memory returndata = address(token).functionCall(data, "SafeERC20: low-level call failed");
+        if (returndata.length > 0) {
+            // Return data is optional
+            require(abi.decode(returndata, (bool)), "SafeERC20: ERC20 operation did not succeed");
+        }
+    }
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "GovernableBase.sol";
+
+contract Governable is GovernableBase {
+    constructor(address _governor) {
+        governor = _governor;
+        emit GovernorChanged(address(0), _governor);
+    }
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+/// @notice Defines different errors emitted by Gyroscope contracts
+library Errors {
+    string public constant TOKEN_AND_AMOUNTS_LENGTH_DIFFER = "1";
+    string public constant TOO_MUCH_SLIPPAGE = "2";
+    string public constant EXCHANGER_NOT_FOUND = "3";
+    string public constant POOL_IDS_NOT_FOUND = "4";
+    string public constant WOULD_UNBALANCE_GYROSCOPE = "5";
+    string public constant VAULT_ALREADY_EXISTS = "6";
+    string public constant VAULT_NOT_FOUND = "7";
+
+    string public constant X_OUT_OF_BOUNDS = "20";
+    string public constant Y_OUT_OF_BOUNDS = "21";
+    string public constant PRODUCT_OUT_OF_BOUNDS = "22";
+    string public constant INVALID_EXPONENT = "23";
+    string public constant OUT_OF_BOUNDS = "24";
+    string public constant ZERO_DIVISION = "25";
+    string public constant ADD_OVERFLOW = "26";
+    string public constant SUB_OVERFLOW = "27";
+    string public constant MUL_OVERFLOW = "28";
+    string public constant DIV_INTERNAL = "29";
+
+    // User errors
+    string public constant NOT_AUTHORIZED = "30";
+    string public constant INVALID_ARGUMENT = "31";
+    string public constant KEY_NOT_FOUND = "32";
+    string public constant KEY_FROZEN = "33";
+    string public constant INSUFFICIENT_BALANCE = "34";
+    string public constant INVALID_ASSET = "35";
+
+    // Oracle related errors
+    string public constant ASSET_NOT_SUPPORTED = "40";
+    string public constant STALE_PRICE = "41";
+    string public constant NEGATIVE_PRICE = "42";
+    string public constant INVALID_MESSAGE = "43";
+    string public constant TOO_MUCH_VOLATILITY = "44";
+    string public constant WETH_ADDRESS_NOT_FIRST = "44";
+    string public constant ROOT_PRICE_NOT_GROUNDED = "45";
+    string public constant NOT_ENOUGH_TWAPS = "46";
+    string public constant ZERO_PRICE_TWAP = "47";
+    string public constant INVALID_NUMBER_WEIGHTS = "48";
+
+    //Vault safety check related errors
+    string public constant A_VAULT_HAS_ALL_STABLECOINS_OFF_PEG = "51";
+    string public constant NOT_SAFE_TO_MINT = "52";
+    string public constant NOT_SAFE_TO_REDEEM = "53";
+    string public constant AMOUNT_AND_PRICE_LENGTH_DIFFER = "54";
+    string public constant TOKEN_PRICES_TOO_SMALL = "55";
+    string public constant TRYING_TO_REDEEM_MORE_THAN_VAULT_CONTAINS = "56";
+    string public constant CALLER_NOT_MOTHERBOARD = "57";
+    string public constant CALLER_NOT_RESERVE_MANAGER = "58";
+
+    string public constant VAULT_FLOW_TOO_HIGH = "60";
+    string public constant OPERATION_SUCCEEDS_BUT_SAFETY_MODE_ACTIVATED = "61";
+    string public constant ORACLE_GUARDIAN_TIME_LIMIT = "62";
+    string public constant NOT_ENOUGH_FLOW_DATA = "63";
+    string public constant SUPPLY_CAP_EXCEEDED = "64";
+    string public constant SAFETY_MODE_ACTIVATED = "65";
+
+    // misc errors
+    string public constant REDEEM_AMOUNT_BUG = "100";
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+/// @notice Contains the data structures to express token routing
+library DataTypes {
+    /// @notice Contains a token and the amount associated with it
+    struct MonetaryAmount {
+        address tokenAddress;
+        uint256 amount;
+    }
+
+    /// @notice Contains a token and the price associated with it
+    struct PricedToken {
+        address tokenAddress;
+        bool isStable;
+        uint256 price;
+    }
+
+    /// @notice A route from/to a token to a vault
+    /// This is used to determine in which vault the token should be deposited
+    /// or from which vault it should be withdrawn
+    struct TokenToVaultMapping {
+        address inputToken;
+        address vault;
+    }
+
+    /// @notice Asset used to mint
+    struct MintAsset {
+        address inputToken;
+        uint256 inputAmount;
+        address destinationVault;
+    }
+
+    /// @notice Asset to redeem
+    struct RedeemAsset {
+        address outputToken;
+        uint256 minOutputAmount;
+        uint256 valueRatio;
+        address originVault;
+    }
+
+    /// @notice Persisted metadata about the vault
+    struct PersistedVaultMetadata {
+        uint256 initialPrice;
+        uint256 initialWeight;
+        uint256 shortFlowMemory;
+        uint256 shortFlowThreshold;
+    }
+
+    /// @notice Directional (in or out) flow data for the vaults
+    struct DirectionalFlowData {
+        uint128 shortFlow;
+        uint64 lastSafetyBlock;
+        uint64 lastSeenBlock;
+    }
+
+    /// @notice Bidirectional vault flow data
+    struct FlowData {
+        DirectionalFlowData inFlow;
+        DirectionalFlowData outFlow;
+    }
+
+    /// @notice Vault flow direction
+    enum Direction {
+        In,
+        Out,
+        Both
+    }
+
+    /// @notice Vault address and direction for Oracle Guardian
+    struct GuardedVaults {
+        address vaultAddress;
+        Direction direction;
+    }
+
+    /// @notice Vault with metadata
+    struct VaultInfo {
+        address vault;
+        uint8 decimals;
+        address underlying;
+        uint256 price;
+        PersistedVaultMetadata persistedMetadata;
+        uint256 reserveBalance;
+        uint256 currentWeight;
+        uint256 idealWeight;
+        PricedToken[] pricedTokens;
+    }
+
+    /// @notice Vault metadata
+    struct VaultMetadata {
+        address vault;
+        uint256 idealWeight;
+        uint256 currentWeight;
+        uint256 resultingWeight;
+        uint256 price;
+        bool allStablecoinsOnPeg;
+        bool atLeastOnePriceLargeEnough;
+        bool vaultWithinEpsilon;
+        PricedToken[] pricedTokens;
+    }
+
+    /// @notice Metadata to contain vaults metadata
+    struct Metadata {
+        VaultMetadata[] vaultMetadata;
+        bool allVaultsWithinEpsilon;
+        bool allStablecoinsAllVaultsOnPeg;
+        bool allVaultsUsingLargeEnoughPrices;
+        bool mint;
+    }
+
+    /// @notice Mint or redeem order struct
+    struct Order {
+        VaultWithAmount[] vaultsWithAmount;
+        bool mint;
+    }
+
+    /// @notice Vault info with associated amount for order operation
+    struct VaultWithAmount {
+        VaultInfo vaultInfo;
+        uint256 amount;
+    }
+
+    /// @notice state of the reserve (i.e., all the vaults)
+    struct ReserveState {
+        uint256 totalUSDValue;
+        VaultInfo[] vaults;
+    }
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+pragma solidity ^0.8.4;
+
+import "Vaults.sol";
+
+import "IERC20Metadata.sol";
+
+/// @notice A vault is one of the component of the reserve and has a one-to-one
+/// mapping to an underlying pool (e.g. Balancer pool, Curve pool, Uniswap pool...)
+/// It is itself an ERC-20 token that is used to track the ownership of the LP tokens
+/// deposited in the vault
+/// A vault can be associated with a strategy to generate yield on the deposited funds
+interface IGyroVault is IERC20Metadata {
+    /// @return The type of the vault
+    function vaultType() external view returns (Vaults.Type);
+
+    /// @return The token associated with this vault
+    /// This can be any type of token but will likely be an LP token in practice
+    function underlying() external view returns (address);
+
+    /// @return The token associated with this vault
+    /// In the case of an LP token, this will be the underlying tokens
+    /// associated to it (e.g. [ETH, DAI] for a ETH/DAI pool LP token or [USDC] for aUSDC)
+    /// In most cases, the tokens returned will not be LP tokens
+    function getTokens() external view returns (IERC20[] memory);
+
+    /// @return The total amount of underlying tokens in the vault
+    function totalUnderlying() external view returns (uint256);
+
+    /// @return The exchange rate between an underlying tokens and the token of this vault
+    function exchangeRate() external view returns (uint256);
+
+    /// @notice Deposits `underlyingAmount` of LP token supported
+    /// and sends back the received vault tokens
+    /// @param underlyingAmount the amount of underlying to deposit
+    /// @return vaultTokenAmount the amount of vault token sent back
+    function deposit(uint256 underlyingAmount, uint256 minVaultTokensOut)
+        external
+        returns (uint256 vaultTokenAmount);
+
+    /// @notice Simlar to `deposit(uint256 underlyingAmount)` but credits the tokens
+    /// to `beneficiary` instead of `msg.sender`
+    function depositFor(
+        address beneficiary,
+        uint256 underlyingAmount,
+        uint256 minVaultTokensOut
+    ) external returns (uint256 vaultTokenAmount);
+
+    /// @notice Dry-run version of deposit
+    function dryDeposit(uint256 underlyingAmount, uint256 minVaultTokensOut)
+        external
+        view
+        returns (uint256 vaultTokenAmount, string memory error);
+
+    /// @notice Withdraws `vaultTokenAmount` of LP token supported
+    /// and burns the vault tokens
+    /// @param vaultTokenAmount the amount of vault token to withdraw
+    /// @return underlyingAmount the amount of LP token sent back
+    function withdraw(uint256 vaultTokenAmount, uint256 minUnderlyingOut)
+        external
+        returns (uint256 underlyingAmount);
+
+    /// @notice Dry-run version of `withdraw`
+    function dryWithdraw(uint256 vaultTokenAmount, uint256 minUnderlyingOut)
+        external
+        view
+        returns (uint256 underlyingAmount, string memory error);
+
+    /// @return The address of the current strategy used by the vault
+    function strategy() external view returns (address);
+
+    /// @notice Sets the address of the strategy to use for this vault
+    /// This will be used through governance
+    /// @param strategyAddress the address of the strategy contract that should follow the `IStrategy` interface
+    function setStrategy(address strategyAddress) external;
+
+    /// @return the block at which the vault has been deployed
+    function deployedAt() external view returns (uint256);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+
+
+pragma solidity ^0.8.4;
+
+import "IERC20.sol";
+
+/**
+ * @dev Interface for the WETH token contract used internally for wrapping and unwrapping, to support
+ * sending and receiving ETH in joins, swaps, and internal balance deposits and withdrawals.
+ */
+interface IWETH is IERC20 {
+    function deposit() external payable;
+
+    function withdraw(uint256 amount) external;
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+
+import "IERC20.sol";
+
+import "IWETH.sol";
+import "IAsset.sol";
+import "IAuthorizer.sol";
+import "IFlashLoanRecipient.sol";
+import "ISignaturesValidator.sol";
+import "ITemporarilyPausable.sol";
+
+pragma solidity ^0.8.4;
+
+/**
+ * @dev Full external interface for the Vault core contract - no external or public methods exist in the contract that
+ * don't override one of these declarations.
+ */
+interface IVault is ISignaturesValidator, ITemporarilyPausable {
+    // Generalities about the Vault:
+    //
+    // - Whenever documentation refers to 'tokens', it strictly refers to ERC20-compliant token contracts. Tokens are
+    // transferred out of the Vault by calling the `IERC20.transfer` function, and transferred in by calling
+    // `IERC20.transferFrom`. In these cases, the sender must have previously allowed the Vault to use their tokens by
+    // calling `IERC20.approve`. The only deviation from the ERC20 standard that is supported is functions not returning
+    // a boolean value: in these scenarios, a non-reverting call is assumed to be successful.
+    //
+    // - All non-view functions in the Vault are non-reentrant: calling them while another one is mid-execution (e.g.
+    // while execution control is transferred to a token contract during a swap) will result in a revert. View
+    // functions can be called in a re-reentrant way, but doing so might cause them to return inconsistent results.
+    // Contracts calling view functions in the Vault must make sure the Vault has not already been entered.
+    //
+    // - View functions revert if referring to either unregistered Pools, or unregistered tokens for registered Pools.
+
+    // Authorizer
+    //
+    // Some system actions are permissioned, like setting and collecting protocol fees. This permissioning system exists
+    // outside of the Vault in the Authorizer contract: the Vault simply calls the Authorizer to check if the caller
+    // can perform a given action.
+
+    /**
+     * @dev Returns the Vault's Authorizer.
+     */
+    function getAuthorizer() external view returns (IAuthorizer);
+
+    /**
+     * @dev Sets a new Authorizer for the Vault. The caller must be allowed by the current Authorizer to do this.
+     *
+     * Emits an `AuthorizerChanged` event.
+     */
+    function setAuthorizer(IAuthorizer newAuthorizer) external;
+
+    /**
+     * @dev Emitted when a new authorizer is set by `setAuthorizer`.
+     */
+    event AuthorizerChanged(IAuthorizer indexed newAuthorizer);
+
+    // Relayers
+    //
+    // Additionally, it is possible for an account to perform certain actions on behalf of another one, using their
+    // Vault ERC20 allowance and Internal Balance. These accounts are said to be 'relayers' for these Vault functions,
+    // and are expected to be smart contracts with sound authentication mechanisms. For an account to be able to wield
+    // this power, two things must occur:
+    //  - The Authorizer must grant the account the permission to be a relayer for the relevant Vault function. This
+    //    means that Balancer governance must approve each individual contract to act as a relayer for the intended
+    //    functions.
+    //  - Each user must approve the relayer to act on their behalf.
+    // This double protection means users cannot be tricked into approving malicious relayers (because they will not
+    // have been allowed by the Authorizer via governance), nor can malicious relayers approved by a compromised
+    // Authorizer or governance drain user funds, since they would also need to be approved by each individual user.
+
+    /**
+     * @dev Returns true if `user` has approved `relayer` to act as a relayer for them.
+     */
+    function hasApprovedRelayer(address user, address relayer) external view returns (bool);
+
+    /**
+     * @dev Allows `relayer` to act as a relayer for `sender` if `approved` is true, and disallows it otherwise.
+     *
+     * Emits a `RelayerApprovalChanged` event.
+     */
+    function setRelayerApproval(
+        address sender,
+        address relayer,
+        bool approved
+    ) external;
+
+    /**
+     * @dev Emitted every time a relayer is approved or disapproved by `setRelayerApproval`.
+     */
+    event RelayerApprovalChanged(address indexed relayer, address indexed sender, bool approved);
+
+    // Internal Balance
+    //
+    // Users can deposit tokens into the Vault, where they are allocated to their Internal Balance, and later
+    // transferred or withdrawn. It can also be used as a source of tokens when joining Pools, as a destination
+    // when exiting them, and as either when performing swaps. This usage of Internal Balance results in greatly reduced
+    // gas costs when compared to relying on plain ERC20 transfers, leading to large savings for frequent users.
+    //
+    // Internal Balance management features batching, which means a single contract call can be used to perform multiple
+    // operations of different kinds, with different senders and recipients, at once.
+
+    /**
+     * @dev Returns `user`'s Internal Balance for a set of tokens.
+     */
+    function getInternalBalance(address user, IERC20[] memory tokens)
+        external
+        view
+        returns (uint256[] memory);
+
+    /**
+     * @dev Performs a set of user balance operations, which involve Internal Balance (deposit, withdraw or transfer)
+     * and plain ERC20 transfers using the Vault's allowance. This last feature is particularly useful for relayers, as
+     * it lets integrators reuse a user's Vault allowance.
+     *
+     * For each operation, if the caller is not `sender`, it must be an authorized relayer for them.
+     */
+    function manageUserBalance(UserBalanceOp[] memory ops) external payable;
+
+    /**
+     * @dev Data for `manageUserBalance` operations, which include the possibility for ETH to be sent and received
+     without manual WETH wrapping or unwrapping.
+     */
+    struct UserBalanceOp {
+        UserBalanceOpKind kind;
+        IAsset asset;
+        uint256 amount;
+        address sender;
+        address payable recipient;
+    }
+
+    // There are four possible operations in `manageUserBalance`:
+    //
+    // - DEPOSIT_INTERNAL
+    // Increases the Internal Balance of the `recipient` account by transferring tokens from the corresponding
+    // `sender`. The sender must have allowed the Vault to use their tokens via `IERC20.approve()`.
+    //
+    // ETH can be used by passing the ETH sentinel value as the asset and forwarding ETH in the call: it will be wrapped
+    // and deposited as WETH. Any ETH amount remaining will be sent back to the caller (not the sender, which is
+    // relevant for relayers).
+    //
+    // Emits an `InternalBalanceChanged` event.
+    //
+    //
+    // - WITHDRAW_INTERNAL
+    // Decreases the Internal Balance of the `sender` account by transferring tokens to the `recipient`.
+    //
+    // ETH can be used by passing the ETH sentinel value as the asset. This will deduct WETH instead, unwrap it and send
+    // it to the recipient as ETH.
+    //
+    // Emits an `InternalBalanceChanged` event.
+    //
+    //
+    // - TRANSFER_INTERNAL
+    // Transfers tokens from the Internal Balance of the `sender` account to the Internal Balance of `recipient`.
+    //
+    // Reverts if the ETH sentinel value is passed.
+    //
+    // Emits an `InternalBalanceChanged` event.
+    //
+    //
+    // - TRANSFER_EXTERNAL
+    // Transfers tokens from `sender` to `recipient`, using the Vault's ERC20 allowance. This is typically used by
+    // relayers, as it lets them reuse a user's Vault allowance.
+    //
+    // Reverts if the ETH sentinel value is passed.
+    //
+    // Emits an `ExternalBalanceTransfer` event.
+
+    enum UserBalanceOpKind {
+        DEPOSIT_INTERNAL,
+        WITHDRAW_INTERNAL,
+        TRANSFER_INTERNAL,
+        TRANSFER_EXTERNAL
+    }
+
+    /**
+     * @dev Emitted when a user's Internal Balance changes, either from calls to `manageUserBalance`, or through
+     * interacting with Pools using Internal Balance.
+     *
+     * Because Internal Balance works exclusively with ERC20 tokens, ETH deposits and withdrawals will use the WETH
+     * address.
+     */
+    event InternalBalanceChanged(address indexed user, IERC20 indexed token, int256 delta);
+
+    /**
+     * @dev Emitted when a user's Vault ERC20 allowance is used by the Vault to transfer tokens to an external account.
+     */
+    event ExternalBalanceTransfer(
+        IERC20 indexed token,
+        address indexed sender,
+        address recipient,
+        uint256 amount
+    );
+
+    // Pools
+    //
+    // There are three specialization settings for Pools, which allow for cheaper swaps at the cost of reduced
+    // functionality:
+    //
+    //  - General: no specialization, suited for all Pools. IGeneralPool is used for swap request callbacks, passing the
+    // balance of all tokens in the Pool. These Pools have the largest swap costs (because of the extra storage reads),
+    // which increase with the number of registered tokens.
+    //
+    //  - Minimal Swap Info: IMinimalSwapInfoPool is used instead of IGeneralPool, which saves gas by only passing the
+    // balance of the two tokens involved in the swap. This is suitable for some pricing algorithms, like the weighted
+    // constant product one popularized by Balancer V1. Swap costs are smaller compared to general Pools, and are
+    // independent of the number of registered tokens.
+    //
+    //  - Two Token: only allows two tokens to be registered. This achieves the lowest possible swap gas cost. Like
+    // minimal swap info Pools, these are called via IMinimalSwapInfoPool.
+
+    enum PoolSpecialization {
+        GENERAL,
+        MINIMAL_SWAP_INFO,
+        TWO_TOKEN
+    }
+
+    /**
+     * @dev Registers the caller account as a Pool with a given specialization setting. Returns the Pool's ID, which
+     * is used in all Pool-related functions. Pools cannot be deregistered, nor can the Pool's specialization be
+     * changed.
+     *
+     * The caller is expected to be a smart contract that implements either `IGeneralPool` or `IMinimalSwapInfoPool`,
+     * depending on the chosen specialization setting. This contract is known as the Pool's contract.
+     *
+     * Note that the same contract may register itself as multiple Pools with unique Pool IDs, or in other words,
+     * multiple Pools may share the same contract.
+     *
+     * Emits a `PoolRegistered` event.
+     */
+    function registerPool(PoolSpecialization specialization) external returns (bytes32);
+
+    /**
+     * @dev Emitted when a Pool is registered by calling `registerPool`.
+     */
+    event PoolRegistered(
+        bytes32 indexed poolId,
+        address indexed poolAddress,
+        PoolSpecialization specialization
+    );
+
+    /**
+     * @dev Returns a Pool's contract address and specialization setting.
+     */
+    function getPool(bytes32 poolId) external view returns (address, PoolSpecialization);
+
+    /**
+     * @dev Registers `tokens` for the `poolId` Pool. Must be called by the Pool's contract.
+     *
+     * Pools can only interact with tokens they have registered. Users join a Pool by transferring registered tokens,
+     * exit by receiving registered tokens, and can only swap registered tokens.
+     *
+     * Each token can only be registered once. For Pools with the Two Token specialization, `tokens` must have a length
+     * of two, that is, both tokens must be registered in the same `registerTokens` call, and they must be sorted in
+     * ascending order.
+     *
+     * The `tokens` and `assetManagers` arrays must have the same length, and each entry in these indicates the Asset
+     * Manager for the corresponding token. Asset Managers can manage a Pool's tokens via `managePoolBalance`,
+     * depositing and withdrawing them directly, and can even set their balance to arbitrary amounts. They are therefore
+     * expected to be highly secured smart contracts with sound design principles, and the decision to register an
+     * Asset Manager should not be made lightly.
+     *
+     * Pools can choose not to assign an Asset Manager to a given token by passing in the zero address. Once an Asset
+     * Manager is set, it cannot be changed except by deregistering the associated token and registering again with a
+     * different Asset Manager.
+     *
+     * Emits a `TokensRegistered` event.
+     */
+    function registerTokens(
+        bytes32 poolId,
+        IERC20[] memory tokens,
+        address[] memory assetManagers
+    ) external;
+
+    /**
+     * @dev Emitted when a Pool registers tokens by calling `registerTokens`.
+     */
+    event TokensRegistered(bytes32 indexed poolId, IERC20[] tokens, address[] assetManagers);
+
+    /**
+     * @dev Deregisters `tokens` for the `poolId` Pool. Must be called by the Pool's contract.
+     *
+     * Only registered tokens (via `registerTokens`) can be deregistered. Additionally, they must have zero total
+     * balance. For Pools with the Two Token specialization, `tokens` must have a length of two, that is, both tokens
+     * must be deregistered in the same `deregisterTokens` call.
+     *
+     * A deregistered token can be re-registered later on, possibly with a different Asset Manager.
+     *
+     * Emits a `TokensDeregistered` event.
+     */
+    function deregisterTokens(bytes32 poolId, IERC20[] memory tokens) external;
+
+    /**
+     * @dev Emitted when a Pool deregisters tokens by calling `deregisterTokens`.
+     */
+    event TokensDeregistered(bytes32 indexed poolId, IERC20[] tokens);
+
+    /**
+     * @dev Returns detailed information for a Pool's registered token.
+     *
+     * `cash` is the number of tokens the Vault currently holds for the Pool. `managed` is the number of tokens
+     * withdrawn and held outside the Vault by the Pool's token Asset Manager. The Pool's total balance for `token`
+     * equals the sum of `cash` and `managed`.
+     *
+     * Internally, `cash` and `managed` are stored using 112 bits. No action can ever cause a Pool's token `cash`,
+     * `managed` or `total` balance to be greater than 2^112 - 1.
+     *
+     * `lastChangeBlock` is the number of the block in which `token`'s total balance was last modified (via either a
+     * join, exit, swap, or Asset Manager update). This value is useful to avoid so-called 'sandwich attacks', for
+     * example when developing price oracles. A change of zero (e.g. caused by a swap with amount zero) is considered a
+     * change for this purpose, and will update `lastChangeBlock`.
+     *
+     * `assetManager` is the Pool's token Asset Manager.
+     */
+    function getPoolTokenInfo(bytes32 poolId, IERC20 token)
+        external
+        view
+        returns (
+            uint256 cash,
+            uint256 managed,
+            uint256 lastChangeBlock,
+            address assetManager
+        );
+
+    /**
+     * @dev Returns a Pool's registered tokens, the total balance for each, and the latest block when *any* of
+     * the tokens' `balances` changed.
+     *
+     * The order of the `tokens` array is the same order that will be used in `joinPool`, `exitPool`, as well as in all
+     * Pool hooks (where applicable). Calls to `registerTokens` and `deregisterTokens` may change this order.
+     *
+     * If a Pool only registers tokens once, and these are sorted in ascending order, they will be stored in the same
+     * order as passed to `registerTokens`.
+     *
+     * Total balances include both tokens held by the Vault and those withdrawn by the Pool's Asset Managers. These are
+     * the amounts used by joins, exits and swaps. For a detailed breakdown of token balances, use `getPoolTokenInfo`
+     * instead.
+     */
+    function getPoolTokens(bytes32 poolId)
+        external
+        view
+        returns (
+            IERC20[] memory tokens,
+            uint256[] memory balances,
+            uint256 lastChangeBlock
+        );
+
+    /**
+     * @dev Called by users to join a Pool, which transfers tokens from `sender` into the Pool's balance. This will
+     * trigger custom Pool behavior, which will typically grant something in return to `recipient` - often tokenized
+     * Pool shares.
+     *
+     * If the caller is not `sender`, it must be an authorized relayer for them.
+     *
+     * The `assets` and `maxAmountsIn` arrays must have the same length, and each entry indicates the maximum amount
+     * to send for each asset. The amounts to send are decided by the Pool and not the Vault: it just enforces
+     * these maximums.
+     *
+     * If joining a Pool that holds WETH, it is possible to send ETH directly: the Vault will do the wrapping. To enable
+     * this mechanism, the IAsset sentinel value (the zero address) must be passed in the `assets` array instead of the
+     * WETH address. Note that it is not possible to combine ETH and WETH in the same join. Any excess ETH will be sent
+     * back to the caller (not the sender, which is important for relayers).
+     *
+     * `assets` must have the same length and order as the array returned by `getPoolTokens`. This prevents issues when
+     * interacting with Pools that register and deregister tokens frequently. If sending ETH however, the array must be
+     * sorted *before* replacing the WETH address with the ETH sentinel value (the zero address), which means the final
+     * `assets` array might not be sorted. Pools with no registered tokens cannot be joined.
+     *
+     * If `fromInternalBalance` is true, the caller's Internal Balance will be preferred: ERC20 transfers will only
+     * be made for the difference between the requested amount and Internal Balance (if any). Note that ETH cannot be
+     * withdrawn from Internal Balance: attempting to do so will trigger a revert.
+     *
+     * This causes the Vault to call the `IBasePool.onJoinPool` hook on the Pool's contract, where Pools implement
+     * their own custom logic. This typically requires additional information from the user (such as the expected number
+     * of Pool shares). This can be encoded in the `userData` argument, which is ignored by the Vault and passed
+     * directly to the Pool's contract, as is `recipient`.
+     *
+     * Emits a `PoolBalanceChanged` event.
+     */
+    function joinPool(
+        bytes32 poolId,
+        address sender,
+        address recipient,
+        JoinPoolRequest memory request
+    ) external payable;
+
+    struct JoinPoolRequest {
+        IAsset[] assets;
+        uint256[] maxAmountsIn;
+        bytes userData;
+        bool fromInternalBalance;
+    }
+
+    /**
+     * @dev Called by users to exit a Pool, which transfers tokens from the Pool's balance to `recipient`. This will
+     * trigger custom Pool behavior, which will typically ask for something in return from `sender` - often tokenized
+     * Pool shares. The amount of tokens that can be withdrawn is limited by the Pool's `cash` balance (see
+     * `getPoolTokenInfo`).
+     *
+     * If the caller is not `sender`, it must be an authorized relayer for them.
+     *
+     * The `tokens` and `minAmountsOut` arrays must have the same length, and each entry in these indicates the minimum
+     * token amount to receive for each token contract. The amounts to send are decided by the Pool and not the Vault:
+     * it just enforces these minimums.
+     *
+     * If exiting a Pool that holds WETH, it is possible to receive ETH directly: the Vault will do the unwrapping. To
+     * enable this mechanism, the IAsset sentinel value (the zero address) must be passed in the `assets` array instead
+     * of the WETH address. Note that it is not possible to combine ETH and WETH in the same exit.
+     *
+     * `assets` must have the same length and order as the array returned by `getPoolTokens`. This prevents issues when
+     * interacting with Pools that register and deregister tokens frequently. If receiving ETH however, the array must
+     * be sorted *before* replacing the WETH address with the ETH sentinel value (the zero address), which means the
+     * final `assets` array might not be sorted. Pools with no registered tokens cannot be exited.
+     *
+     * If `toInternalBalance` is true, the tokens will be deposited to `recipient`'s Internal Balance. Otherwise,
+     * an ERC20 transfer will be performed. Note that ETH cannot be deposited to Internal Balance: attempting to
+     * do so will trigger a revert.
+     *
+     * `minAmountsOut` is the minimum amount of tokens the user expects to get out of the Pool, for each token in the
+     * `tokens` array. This array must match the Pool's registered tokens.
+     *
+     * This causes the Vault to call the `IBasePool.onExitPool` hook on the Pool's contract, where Pools implement
+     * their own custom logic. This typically requires additional information from the user (such as the expected number
+     * of Pool shares to return). This can be encoded in the `userData` argument, which is ignored by the Vault and
+     * passed directly to the Pool's contract.
+     *
+     * Emits a `PoolBalanceChanged` event.
+     */
+    function exitPool(
+        bytes32 poolId,
+        address sender,
+        address payable recipient,
+        ExitPoolRequest memory request
+    ) external;
+
+    struct ExitPoolRequest {
+        IAsset[] assets;
+        uint256[] minAmountsOut;
+        bytes userData;
+        bool toInternalBalance;
+    }
+
+    /**
+     * @dev Emitted when a user joins or exits a Pool by calling `joinPool` or `exitPool`, respectively.
+     */
+    event PoolBalanceChanged(
+        bytes32 indexed poolId,
+        address indexed liquidityProvider,
+        IERC20[] tokens,
+        int256[] deltas,
+        uint256[] protocolFeeAmounts
+    );
+
+    enum PoolBalanceChangeKind {
+        JOIN,
+        EXIT
+    }
+
+    // Swaps
+    //
+    // Users can swap tokens with Pools by calling the `swap` and `batchSwap` functions. To do this,
+    // they need not trust Pool contracts in any way: all security checks are made by the Vault. They must however be
+    // aware of the Pools' pricing algorithms in order to estimate the prices Pools will quote.
+    //
+    // The `swap` function executes a single swap, while `batchSwap` can perform multiple swaps in sequence.
+    // In each individual swap, tokens of one kind are sent from the sender to the Pool (this is the 'token in'),
+    // and tokens of another kind are sent from the Pool to the recipient in exchange (this is the 'token out').
+    // More complex swaps, such as one token in to multiple tokens out can be achieved by batching together
+    // individual swaps.
+    //
+    // There are two swap kinds:
+    //  - 'given in' swaps, where the amount of tokens in (sent to the Pool) is known, and the Pool determines (via the
+    // `onSwap` hook) the amount of tokens out (to send to the recipient).
+    //  - 'given out' swaps, where the amount of tokens out (received from the Pool) is known, and the Pool determines
+    // (via the `onSwap` hook) the amount of tokens in (to receive from the sender).
+    //
+    // Additionally, it is possible to chain swaps using a placeholder input amount, which the Vault replaces with
+    // the calculated output of the previous swap. If the previous swap was 'given in', this will be the calculated
+    // tokenOut amount. If the previous swap was 'given out', it will use the calculated tokenIn amount. These extended
+    // swaps are known as 'multihop' swaps, since they 'hop' through a number of intermediate tokens before arriving at
+    // the final intended token.
+    //
+    // In all cases, tokens are only transferred in and out of the Vault (or withdrawn from and deposited into Internal
+    // Balance) after all individual swaps have been completed, and the net token balance change computed. This makes
+    // certain swap patterns, such as multihops, or swaps that interact with the same token pair in multiple Pools, cost
+    // much less gas than they would otherwise.
+    //
+    // It also means that under certain conditions it is possible to perform arbitrage by swapping with multiple
+    // Pools in a way that results in net token movement out of the Vault (profit), with no tokens being sent in (only
+    // updating the Pool's internal accounting).
+    //
+    // To protect users from front-running or the market changing rapidly, they supply a list of 'limits' for each token
+    // involved in the swap, where either the maximum number of tokens to send (by passing a positive value) or the
+    // minimum amount of tokens to receive (by passing a negative value) is specified.
+    //
+    // Additionally, a 'deadline' timestamp can also be provided, forcing the swap to fail if it occurs after
+    // this point in time (e.g. if the transaction failed to be included in a block promptly).
+    //
+    // If interacting with Pools that hold WETH, it is possible to both send and receive ETH directly: the Vault will do
+    // the wrapping and unwrapping. To enable this mechanism, the IAsset sentinel value (the zero address) must be
+    // passed in the `assets` array instead of the WETH address. Note that it is possible to combine ETH and WETH in the
+    // same swap. Any excess ETH will be sent back to the caller (not the sender, which is relevant for relayers).
+    //
+    // Finally, Internal Balance can be used when either sending or receiving tokens.
+
+    enum SwapKind {
+        GIVEN_IN,
+        GIVEN_OUT
+    }
+
+    /**
+     * @dev Performs a swap with a single Pool.
+     *
+     * If the swap is 'given in' (the number of tokens to send to the Pool is known), it returns the amount of tokens
+     * taken from the Pool, which must be greater than or equal to `limit`.
+     *
+     * If the swap is 'given out' (the number of tokens to take from the Pool is known), it returns the amount of tokens
+     * sent to the Pool, which must be less than or equal to `limit`.
+     *
+     * Internal Balance usage and the recipient are determined by the `funds` struct.
+     *
+     * Emits a `Swap` event.
+     */
+    function swap(
+        SingleSwap memory singleSwap,
+        FundManagement memory funds,
+        uint256 limit,
+        uint256 deadline
+    ) external payable returns (uint256);
+
+    /**
+     * @dev Data for a single swap executed by `swap`. `amount` is either `amountIn` or `amountOut` depending on
+     * the `kind` value.
+     *
+     * `assetIn` and `assetOut` are either token addresses, or the IAsset sentinel value for ETH (the zero address).
+     * Note that Pools never interact with ETH directly: it will be wrapped to or unwrapped from WETH by the Vault.
+     *
+     * The `userData` field is ignored by the Vault, but forwarded to the Pool in the `onSwap` hook, and may be
+     * used to extend swap behavior.
+     */
+    struct SingleSwap {
+        bytes32 poolId;
+        SwapKind kind;
+        IAsset assetIn;
+        IAsset assetOut;
+        uint256 amount;
+        bytes userData;
+    }
+
+    /**
+     * @dev Performs a series of swaps with one or multiple Pools. In each individual swap, the caller determines either
+     * the amount of tokens sent to or received from the Pool, depending on the `kind` value.
+     *
+     * Returns an array with the net Vault asset balance deltas. Positive amounts represent tokens (or ETH) sent to the
+     * Vault, and negative amounts represent tokens (or ETH) sent by the Vault. Each delta corresponds to the asset at
+     * the same index in the `assets` array.
+     *
+     * Swaps are executed sequentially, in the order specified by the `swaps` array. Each array element describes a
+     * Pool, the token to be sent to this Pool, the token to receive from it, and an amount that is either `amountIn` or
+     * `amountOut` depending on the swap kind.
+     *
+     * Multihop swaps can be executed by passing an `amount` value of zero for a swap. This will cause the amount in/out
+     * of the previous swap to be used as the amount in for the current one. In a 'given in' swap, 'tokenIn' must equal
+     * the previous swap's `tokenOut`. For a 'given out' swap, `tokenOut` must equal the previous swap's `tokenIn`.
+     *
+     * The `assets` array contains the addresses of all assets involved in the swaps. These are either token addresses,
+     * or the IAsset sentinel value for ETH (the zero address). Each entry in the `swaps` array specifies tokens in and
+     * out by referencing an index in `assets`. Note that Pools never interact with ETH directly: it will be wrapped to
+     * or unwrapped from WETH by the Vault.
+     *
+     * Internal Balance usage, sender, and recipient are determined by the `funds` struct. The `limits` array specifies
+     * the minimum or maximum amount of each token the vault is allowed to transfer.
+     *
+     * `batchSwap` can be used to make a single swap, like `swap` does, but doing so requires more gas than the
+     * equivalent `swap` call.
+     *
+     * Emits `Swap` events.
+     */
+    function batchSwap(
+        SwapKind kind,
+        BatchSwapStep[] memory swaps,
+        IAsset[] memory assets,
+        FundManagement memory funds,
+        int256[] memory limits,
+        uint256 deadline
+    ) external payable returns (int256[] memory);
+
+    /**
+     * @dev Data for each individual swap executed by `batchSwap`. The asset in and out fields are indexes into the
+     * `assets` array passed to that function, and ETH assets are converted to WETH.
+     *
+     * If `amount` is zero, the multihop mechanism is used to determine the actual amount based on the amount in/out
+     * from the previous swap, depending on the swap kind.
+     *
+     * The `userData` field is ignored by the Vault, but forwarded to the Pool in the `onSwap` hook, and may be
+     * used to extend swap behavior.
+     */
+    struct BatchSwapStep {
+        bytes32 poolId;
+        uint256 assetInIndex;
+        uint256 assetOutIndex;
+        uint256 amount;
+        bytes userData;
+    }
+
+    /**
+     * @dev Emitted for each individual swap performed by `swap` or `batchSwap`.
+     */
+    event Swap(
+        bytes32 indexed poolId,
+        IERC20 indexed tokenIn,
+        IERC20 indexed tokenOut,
+        uint256 amountIn,
+        uint256 amountOut
+    );
+
+    /**
+     * @dev All tokens in a swap are either sent from the `sender` account to the Vault, or from the Vault to the
+     * `recipient` account.
+     *
+     * If the caller is not `sender`, it must be an authorized relayer for them.
+     *
+     * If `fromInternalBalance` is true, the `sender`'s Internal Balance will be preferred, performing an ERC20
+     * transfer for the difference between the requested amount and the User's Internal Balance (if any). The `sender`
+     * must have allowed the Vault to use their tokens via `IERC20.approve()`. This matches the behavior of
+     * `joinPool`.
+     *
+     * If `toInternalBalance` is true, tokens will be deposited to `recipient`'s internal balance instead of
+     * transferred. This matches the behavior of `exitPool`.
+     *
+     * Note that ETH cannot be deposited to or withdrawn from Internal Balance: attempting to do so will trigger a
+     * revert.
+     */
+    struct FundManagement {
+        address sender;
+        bool fromInternalBalance;
+        address payable recipient;
+        bool toInternalBalance;
+    }
+
+    /**
+     * @dev Simulates a call to `batchSwap`, returning an array of Vault asset deltas. Calls to `swap` cannot be
+     * simulated directly, but an equivalent `batchSwap` call can and will yield the exact same result.
+     *
+     * Each element in the array corresponds to the asset at the same index, and indicates the number of tokens (or ETH)
+     * the Vault would take from the sender (if positive) or send to the recipient (if negative). The arguments it
+     * receives are the same that an equivalent `batchSwap` call would receive.
+     *
+     * Unlike `batchSwap`, this function performs no checks on the sender or recipient field in the `funds` struct.
+     * This makes it suitable to be called by off-chain applications via eth_call without needing to hold tokens,
+     * approve them for the Vault, or even know a user's address.
+     *
+     * Note that this function is not 'view' (due to implementation details): the client code must explicitly execute
+     * eth_call instead of eth_sendTransaction.
+     */
+    function queryBatchSwap(
+        SwapKind kind,
+        BatchSwapStep[] memory swaps,
+        IAsset[] memory assets,
+        FundManagement memory funds
+    ) external returns (int256[] memory assetDeltas);
+
+    // Flash Loans
+
+    /**
+     * @dev Performs a 'flash loan', sending tokens to `recipient`, executing the `receiveFlashLoan` hook on it,
+     * and then reverting unless the tokens plus a proportional protocol fee have been returned.
+     *
+     * The `tokens` and `amounts` arrays must have the same length, and each entry in these indicates the loan amount
+     * for each token contract. `tokens` must be sorted in ascending order.
+     *
+     * The 'userData' field is ignored by the Vault, and forwarded as-is to `recipient` as part of the
+     * `receiveFlashLoan` call.
+     *
+     * Emits `FlashLoan` events.
+     */
+    function flashLoan(
+        IFlashLoanRecipient recipient,
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        bytes memory userData
+    ) external;
+
+    /**
+     * @dev Emitted for each individual flash loan performed by `flashLoan`.
+     */
+    event FlashLoan(
+        IFlashLoanRecipient indexed recipient,
+        IERC20 indexed token,
+        uint256 amount,
+        uint256 feeAmount
+    );
+
+    // Asset Management
+    //
+    // Each token registered for a Pool can be assigned an Asset Manager, which is able to freely withdraw the Pool's
+    // tokens from the Vault, deposit them, or assign arbitrary values to its `managed` balance (see
+    // `getPoolTokenInfo`). This makes them extremely powerful and dangerous. Even if an Asset Manager only directly
+    // controls one of the tokens in a Pool, a malicious manager could set that token's balance to manipulate the
+    // prices of the other tokens, and then drain the Pool with swaps. The risk of using Asset Managers is therefore
+    // not constrained to the tokens they are managing, but extends to the entire Pool's holdings.
+    //
+    // However, a properly designed Asset Manager smart contract can be safely used for the Pool's benefit,
+    // for example by lending unused tokens out for interest, or using them to participate in voting protocols.
+    //
+    // This concept is unrelated to the IAsset interface.
+
+    /**
+     * @dev Performs a set of Pool balance operations, which may be either withdrawals, deposits or updates.
+     *
+     * Pool Balance management features batching, which means a single contract call can be used to perform multiple
+     * operations of different kinds, with different Pools and tokens, at once.
+     *
+     * For each operation, the caller must be registered as the Asset Manager for `token` in `poolId`.
+     */
+    function managePoolBalance(PoolBalanceOp[] memory ops) external;
+
+    struct PoolBalanceOp {
+        PoolBalanceOpKind kind;
+        bytes32 poolId;
+        IERC20 token;
+        uint256 amount;
+    }
+
+    /**
+     * Withdrawals decrease the Pool's cash, but increase its managed balance, leaving the total balance unchanged.
+     *
+     * Deposits increase the Pool's cash, but decrease its managed balance, leaving the total balance unchanged.
+     *
+     * Updates don't affect the Pool's cash balance, but because the managed balance changes, it does alter the total.
+     * The external amount can be either increased or decreased by this call (i.e., reporting a gain or a loss).
+     */
+    enum PoolBalanceOpKind {
+        WITHDRAW,
+        DEPOSIT,
+        UPDATE
+    }
+
+    /**
+     * @dev Emitted when a Pool's token Asset Manager alters its balance via `managePoolBalance`.
+     */
+    event PoolBalanceManaged(
+        bytes32 indexed poolId,
+        address indexed assetManager,
+        IERC20 indexed token,
+        int256 cashDelta,
+        int256 managedDelta
+    );
+
+    // Protocol Fees
+    //
+    // Some operations cause the Vault to collect tokens in the form of protocol fees, which can then be withdrawn by
+    // permissioned accounts.
+    //
+    // There are two kinds of protocol fees:
+    //
+    //  - flash loan fees: charged on all flash loans, as a percentage of the amounts lent.
+    //
+    //  - swap fees: a percentage of the fees charged by Pools when performing swaps. For a number of reasons, including
+    // swap gas costs and interface simplicity, protocol swap fees are not charged on each individual swap. Rather,
+    // Pools are expected to keep track of how much they have charged in swap fees, and pay any outstanding debts to the
+    // Vault when they are joined or exited. This prevents users from joining a Pool with unpaid debt, as well as
+    // exiting a Pool in debt without first paying their share.
+
+    /**
+     * @dev Returns the current protocol fee module.
+     */
+    // function getProtocolFeesCollector() external view returns (ProtocolFeesCollector);
+
+    /**
+     * @dev Safety mechanism to pause most Vault operations in the event of an emergency - typically detection of an
+     * error in some part of the system.
+     *
+     * The Vault can only be paused during an initial time period, after which pausing is forever disabled.
+     *
+     * While the contract is paused, the following features are disabled:
+     * - depositing and transferring internal balance
+     * - transferring external balance (using the Vault's allowance)
+     * - swaps
+     * - joining Pools
+     * - Asset Manager interactions
+     *
+     * Internal Balance can still be withdrawn, and Pools exited.
+     */
+    function setPaused(bool paused) external;
+
+    /**
+     * @dev Returns the Vault's WETH instance.
+     */
+    function WETH() external view returns (IWETH);
+    // solhint-disable-previous-line func-name-mixedcase
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+
+
+pragma solidity ^0.8.4;
+
+interface IAuthorizer {
+    /**
+     * @dev Returns true if `account` can perform the action described by `actionId` in the contract `where`.
+     */
+    function canPerform(
+        bytes32 actionId,
+        address account,
+        address where
+    ) external view returns (bool);
+}
+
+// SPDX-License-Identifier: LicenseRef-Gyro-1.0
+// for information on licensing please see the README in the GitHub repository <https://github.com/gyrostable/core-protocol>.
+
+
+pragma solidity ^0.8.4;
+
+// Inspired by Aave Protocol's IFlashLoanReceiver.
+
+import "IERC20.sol";
+
+interface IFlashLoanRecipient {
+    /**
+     * @dev When `flashLoan` is called on the Vault, it invokes the `receiveFlashLoan` hook on the recipient.
+     *
+     * At the time of the call, the Vault will have transferred `amounts` for `tokens` to the recipient. Before this
+     * call returns, the recipient must have transferred `amounts` plus `feeAmounts` for each token back to the
+     * Vault, or else the entire flash loan will revert.
+     *
+     * `userData` is the same value passed in the `IVault.flashLoan` call.
+     */
+    function receiveFlashLoan(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        bytes memory userData
+    ) external;
+}

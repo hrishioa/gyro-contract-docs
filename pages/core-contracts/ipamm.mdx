@@ -1,0 +1,68 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# IPAMM
+
+The `IPAMM` interface defines the core pricing mechanism for the Gyroscope protocol. This interface is responsible for the following key functions:
+
+1. **Quoting Mint Amounts**: The `computeMintAmount` function allows users to get a quote for how many Gyro Dollars (GYD) they will receive when depositing a certain amount of USD.
+2. **Minting GYD**: The `mint` function allows users to actually mint GYD tokens by depositing the required USD amount.
+3. **Quoting Redeem Amounts**: The `computeRedeemAmount` function allows users to get a quote for how much USD they will receive when redeeming a certain amount of GYD.
+4. **Redeeming GYD**: The `redeem` function allows users to redeem GYD tokens in exchange for the corresponding USD amount.
+5. **Updating System Parameters**: The `setSystemParams` function allows the protocol governance to update the various parameters that govern the primary AMM pricing mechanism.
+
+The `IPAMM` interface is a critical piece of the Gyroscope protocol, as it defines the core logic for minting and redeeming the GYD stablecoin. Let's dive into the details of each of these functions:
+
+## `computeMintAmount`
+
+This function allows users to get a quote for how many GYD tokens they will receive when depositing a certain amount of USD. The function takes two parameters:
+
+1. `usdAmount`: The amount of USD the user wants to deposit.
+2. `reserveUSDValue`: The current USD value of the Gyroscope reserve.
+
+The function then returns the corresponding amount of GYD tokens that will be minted.
+
+<Callout type="info">
+The `reserveUSDValue` parameter is included to future-proof the implementation, in case the reserve's state needs to be taken into account when computing the mint amount.
+</Callout>
+
+## `mint`
+
+This function allows users to actually mint GYD tokens by depositing the required USD amount. It takes the same parameters as `computeMintAmount`, and returns the amount of GYD tokens that were minted.
+
+<Callout type="warning">
+Note that this function can only be called by the authorized Motherboard contract, as it needs to record the minting operation.
+</Callout>
+
+## `computeRedeemAmount`
+
+This function allows users to get a quote for how much USD they will receive when redeeming a certain amount of GYD. The function takes two parameters:
+
+1. `gydAmount`: The amount of GYD tokens the user wants to redeem.
+2. `reserveUSDValue`: The current USD value of the Gyroscope reserve.
+
+The function then returns the corresponding amount of USD that the user will receive.
+
+<Callout type="info">
+Similar to the `mint` function, the `reserveUSDValue` parameter is included to future-proof the implementation.
+</Callout>
+
+## `redeem`
+
+This function allows users to redeem GYD tokens in exchange for the corresponding USD amount. It takes the same parameters as `computeRedeemAmount`, and returns the amount of USD that was sent to the user.
+
+<Callout type="warning">
+Like the `mint` function, `redeem` can only be called by the authorized Motherboard contract.
+</Callout>
+
+## `setSystemParams`
+
+This function allows the protocol governance to update the various parameters that govern the primary AMM pricing mechanism. These parameters include:
+
+- `alphaBar`: The maximum allowed value for the `alpha` parameter in the pricing function.
+- `xuBar`: The maximum allowed value for the `xu` parameter in the pricing function.
+- `thetaBar`: The maximum allowed value for the `theta` parameter in the pricing function.
+- `outflowMemory`: A parameter used in the flow calculation, which determines the "memory" of the system.
+
+Adjusting these parameters can have a significant impact on the behavior of the primary AMM, so changes to the system parameters should be carefully considered and approved by the Gyroscope governance.
+
+In summary, the `IPAMM` interface is a crucial component of the Gyroscope protocol, as it defines the core logic for minting, redeeming, and pricing the GYD stablecoin. By understanding the details of this interface, developers can build applications and integrations that seamlessly interact with the Gyroscope protocol. For more information on the Gyroscope protocol, be sure to check out the [other sections](/core-contracts/pamm) of this developer handbook.

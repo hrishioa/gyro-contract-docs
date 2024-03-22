@@ -1,0 +1,56 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# IReserve
+
+The `IReserve` interface defines the contract that manages the storage and withdrawal of tokens in the Gyroscope protocol. This is a critical component that allows users to deposit tokens into the reserve and withdraw them as needed, especially during mint and redeem operations.
+
+The main responsibilities of the `IReserve` contract include:
+
+* Allowing authorized managers to deposit and withdraw tokens from the reserve
+* Emitting events for deposit and withdrawal operations
+* Adding and removing authorized managers
+
+Let's dive into the key aspects of the `IReserve` interface:
+
+## Managers
+
+The `IReserve` contract maintains a list of authorized managers who are the only entities allowed to withdraw tokens from the reserve. This is a security measure to ensure that only trusted parties can interact with the reserve's funds.
+
+The interface provides the following functions to manage the list of authorized managers:
+
+- `managers()`: Returns the list of authorized managers.
+- `addManager(address manager)`: Adds a new manager to the list.
+- `removeManager(address manager)`: Removes a manager from the list.
+
+Whenever a new manager is added or removed, the contract emits the corresponding `ManagerAdded` or `ManagerRemoved` events.
+
+## Deposit and Withdrawal
+
+The `IReserve` interface provides two main functions for depositing and withdrawing tokens:
+
+- `depositToken(address token, uint256 amount)`: Deposits the specified amount of `token` into the reserve.
+- `withdrawToken(address token, uint256 amount)`: Withdraws the specified amount of `token` from the reserve.
+
+These functions can only be called by the authorized managers, as defined in the previous section. When a deposit or withdrawal is performed, the contract emits the corresponding `Deposit` or `Withdraw` event.
+
+Here's an example of how you might use the `IReserve` interface in your Gyroscope application:
+
+<Callout type="info">
+**Example: Depositing Tokens into the Reserve**
+
+```solidity
+// Assuming you have access to the IReserve contract instance
+address reserveContract = 0x123456789abcdef; // Replace with the actual reserve address
+IERC20 token = IERC20(0xabcdef0123456789); // Replace with the token address
+
+// Deposit 100 tokens into the reserve
+uint256 depositAmount = 100;
+IReserve(reserveContract).depositToken(address(token), depositAmount);
+```
+</Callout>
+
+In this example, we first get a reference to the `IReserve` contract instance and the token contract we want to deposit. We then call the `depositToken` function to deposit 100 tokens into the reserve.
+
+The `IReserve` interface is a crucial component of the Gyroscope protocol, as it ensures the safe and secure management of the reserve's token balances. By providing a clear and well-defined interface, the `IReserve` contract helps maintain the overall reliability and integrity of the Gyroscope ecosystem.
+
+For more information on how the `IReserve` interface integrates with other Gyroscope contracts, please refer to the [IMotherboard](/imotherboard) section.

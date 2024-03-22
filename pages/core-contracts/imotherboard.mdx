@@ -1,0 +1,52 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# IMotherboard
+
+The IMotherboard is the central contract that connects the different components of the Gyroscope protocol. It acts as the main entry point for users to interact with the protocol, handling the minting and redeeming of GYD tokens.
+
+The IMotherboard contract serves as the **bridge** between the user and the various other contracts in the Gyroscope ecosystem, such as the [PAMM](/core-contracts/pamm), [IReserve](/core-contracts/ireserve), and [IGyroConfig](/core-contracts/igyro-config). By providing a unified interface, the IMotherboard simplifies the user experience and ensures the proper coordination of the protocol's core functionality.
+
+## Key Responsibilities
+
+The IMotherboard contract is responsible for the following:
+
+- **Minting GYD Tokens**: When users deposit assets into the protocol, the IMotherboard handles the minting of GYD tokens in exchange. This process involves interacting with the [PAMM](/core-contracts/pamm) contract to determine the appropriate amount of GYD to mint.
+
+- **Redeeming GYD Tokens**: Users can redeem their GYD tokens to withdraw the underlying assets. The IMotherboard coordinates this process, working with the [PAMM](/core-contracts/pamm) and [IReserve](/core-contracts/ireserve) contracts to calculate the redemption amounts and facilitate the withdrawals.
+
+- **Safety Checks**: Before processing any mint or redeem operations, the IMotherboard leverages the [ISafetyCheck](/core-contracts/isafety-check) contract to ensure the proposed actions are safe for the protocol. This helps maintain the integrity of the system and protect against potential vulnerabilities.
+
+- **Routing and Orchestration**: The IMotherboard is responsible for routing user actions to the appropriate contracts and orchestrating the necessary interactions between them. This includes managing the flow of assets, updating internal balances, and triggering events across the protocol.
+
+## Usage
+
+To interact with the Gyroscope protocol, users will primarily interface with the IMotherboard contract. This centralized entry point provides a simplified and secure way to perform key operations, such as minting and redeeming GYD tokens.
+
+<Callout type="info">
+The IMotherboard contract is the recommended way for users to interact with the Gyroscope protocol. By using the IMotherboard, users can be confident that their actions will be properly routed and coordinated across the various protocol components.
+</Callout>
+
+Here's an example of how a user might mint GYD tokens:
+
+<Steps>
+### Step 1
+The user prepares a `MintAsset` array, specifying the input tokens, amounts, and destination vaults for the minting operation.
+
+### Step 2
+The user calls the `mint` function on the IMotherboard contract, passing the `MintAsset` array and the minimum amount of GYD tokens they expect to receive.
+
+### Step 3
+The IMotherboard contract validates the request using the [ISafetyCheck](/core-contracts/isafety-check) contract, ensuring the operation is safe for the protocol.
+
+### Step 4
+If the operation is deemed safe, the IMotherboard coordinates the minting process, interacting with the [PAMM](/core-contracts/pamm) contract to calculate the appropriate amount of GYD tokens to mint, and with the [IReserve](/core-contracts/ireserve) to deposit the input assets.
+
+### Step 5
+The IMotherboard mints the GYD tokens and transfers them to the user's wallet, completing the minting process.
+</Steps>
+
+By using the IMotherboard, users can focus on the high-level functionality of the protocol without needing to understand the intricate details of the underlying contracts and their interactions.
+
+## Conclusion
+
+The IMotherboard is the central hub of the Gyroscope protocol, responsible for coordinating the various components and providing a user-friendly interface for interacting with the system. By abstracting away the complexity of the protocol's internal workings, the IMotherboard simplifies the user experience and helps ensure the safety and integrity of the Gyroscope ecosystem.

@@ -1,0 +1,35 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# LogExpMath
+
+The LogExpMath library provides mathematical functions that utilize logarithms and exponentiation. These operations are essential for certain pricing algorithms used in the Gyroscope protocol, particularly in the [PAMM](/core-contracts/pamm) contract.
+
+The library includes the following key functions:
+
+## `computeAlpha`
+
+This function computes the alpha value, which is a crucial parameter in the Gyroscope pricing model. The alpha value is determined based on the ratio of the reserve balance (`ba`) to the total Gyro supply (`ya`), as well as the system parameter `thetaBar`.
+
+## `computeReserveFixedParams`
+
+This function calculates the reserve value given the redemption level (`x`), the reserve balance (`ba`), the total Gyro supply (`ya`), the alpha value, and the system parameters `xu` and `xl`. It handles different cases depending on the value of `x` relative to `xu` and `xl`.
+
+## `computeXl`
+
+This function computes the value of `xl`, which is the threshold for the redemption level that separates different pricing regions. The calculation involves the reserve balance (`ba`), the total Gyro supply (`ya`), the alpha value, and the system parameter `xuBar`.
+
+## `computeXu`
+
+This function computes the value of `xu`, which is the threshold for the redemption level that separates different pricing regions. The calculation involves the reserve balance (`ba`), the total Gyro supply (`ya`), the alpha value, and the system parameter `xuBar`.
+
+## `computeBa`
+
+This function computes the reserve balance (`ba`) given the redemption level (`xu`) and the system parameters.
+
+## `createDerivedParams`
+
+This function creates a set of derived parameters, such as the thresholds for different pricing regions, based on the system parameters. These derived parameters are used throughout the Gyroscope protocol to optimize computations and improve efficiency.
+
+The LogExpMath library is a crucial component of the Gyroscope protocol, as it provides the mathematical foundation for the primary AMM pricing mechanism implemented in the [PAMM](/core-contracts/pamm) contract. By encapsulating these complex mathematical operations, the library helps to ensure the correctness and reliability of the Gyroscope pricing model.
+
+If you're interested in understanding the intricacies of the Gyroscope pricing algorithm, the LogExpMath library is a great place to start. Its well-documented functions and clear purpose make it an invaluable resource for Gyroscope developers and protocol contributors.

@@ -1,0 +1,9 @@
+{
+  "pamm": "PAMM (PrimaryAMMV1)",
+  "ipamm": "IPAMM",
+  "igyro-config": "IGyroConfig",
+  "igyro-vault": "IGyroVault",
+  "imotherboard": "IMotherboard",
+  "ireserve": "IReserve",
+  "isafety-check": "ISafetyCheck"
+}

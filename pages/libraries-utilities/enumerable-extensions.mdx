@@ -1,0 +1,59 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# EnumerableExtensions
+
+The `EnumerableExtensions` library provides a set of utility functions for working with enumerable data structures, such as [sets](/libraries-utilities/enumerable-extensions) and arrays, in Solidity. This library is particularly useful in the Gyroscope protocol, where we often need to manage collections of addresses, tokens, and other entities.
+
+## Enumerable Sets
+
+One of the key features of the `EnumerableExtensions` library is its support for enumerable sets. An enumerable set is a collection of unique elements that can be efficiently iterated over. This is in contrast to standard Solidity mappings, which do not provide a way to enumerate their keys.
+
+The library provides the following functions for working with enumerable sets:
+
+- `add(set, value)`: Adds a value to the set, if it's not already present.
+- `remove(set, value)`: Removes a value from the set, if it's present.
+- `contains(set, value)`: Checks if a value is present in the set.
+- `length(set)`: Returns the number of elements in the set.
+- `at(set, index)`: Returns the element at the specified index in the set.
+- `values(set)`: Returns an array containing all the elements in the set.
+
+These functions make it easy to manage collections of entities, such as the list of registered vaults or the list of trusted price oracles in the Gyroscope protocol.
+
+## Enumerable Arrays
+
+In addition to enumerable sets, the `EnumerableExtensions` library also provides utilities for working with enumerable arrays. These functions include:
+
+- `indexOf(array, value)`: Finds the index of a value in an array.
+- `contains(array, value)`: Checks if a value is present in an array.
+- `remove(array, index)`: Removes an element from an array at a specific index.
+
+These functions can be useful when you need to perform common array operations, such as checking if an element is present or removing an element from a list.
+
+## Examples
+
+Here's an example of how you might use the `EnumerableExtensions` library in the Gyroscope protocol:
+
+```solidity
+import "EnumerableExtensions.sol";
+
+contract GYROMaintainer {
+    using EnumerableSet for EnumerableSet.AddressSet;
+    EnumerableSet.AddressSet private registeredVaults;
+
+    function registerVault(address vaultAddress) external {
+        registeredVaults.add(vaultAddress);
+    }
+
+    function deregisterVault(address vaultAddress) external {
+        registeredVaults.remove(vaultAddress);
+    }
+
+    function listRegisteredVaults() external view returns (address[] memory) {
+        return registeredVaults.values();
+    }
+}
+```
+
+In this example, we use the `EnumerableSet` from the `EnumerableExtensions` library to manage a set of registered vaults. We can easily add, remove, and list the registered vaults using the provided functions.
+
+The `EnumerableExtensions` library is a valuable tool in the Gyroscope protocol, as it allows us to efficiently manage collections of entities without relying on error-prone and gas-expensive mappings.

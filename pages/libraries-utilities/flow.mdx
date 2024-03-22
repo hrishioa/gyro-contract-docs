@@ -1,0 +1,32 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Flow
+
+The `Flow` library in the Gyroscope protocol is a utility for calculating an *exponential moving sum* based on a specified memory parameter. This is particularly useful for tracking the flow of tokens in and out of the Gyroscope vaults over time.
+
+The key function in the `Flow` library is `updateFlow()`, which takes the following parameters:
+
+- `flowHistory`: The current value of the exponential moving sum.
+- `currentBlock`: The current block number.
+- `lastSeenBlock`: The block number when the flow was last updated.
+- `memoryParam`: The memory parameter to use for the exponential moving sum calculation.
+
+The `updateFlow()` function calculates the new value of the exponential moving sum based on the time elapsed since the last update. If the last update was in the current block, the function simply returns the current `flowHistory` value. If the last update was in a previous block, the function applies an exponential decay to the `flowHistory` value based on the number of blocks elapsed and the `memoryParam`.
+
+The exponential decay is calculated using the formula `flowHistory * memoryParam^(currentBlock - lastSeenBlock)`. This ensures that older flow values have less impact on the current value of the exponential moving sum.
+
+Here's an example of how you might use the `updateFlow()` function:
+
+```solidity
+uint256 flowHistory = 100;
+uint256 currentBlock = block.number;
+uint256 lastSeenBlock = 100;
+uint256 memoryParam = 0.95e18; // 95% memory
+
+uint256 newFlowHistory = Flow.updateFlow(flowHistory, currentBlock, lastSeenBlock, memoryParam);
+// newFlowHistory is now the updated exponential moving sum
+```
+
+In this example, the initial `flowHistory` value is 100, and the `memoryParam` is set to 95% (expressed as 0.95e18). If 10 blocks have elapsed since the last update, the new `flowHistory` value will be approximately 95% of the original value.
+
+The `Flow` library is used throughout the Gyroscope protocol to track the flow of tokens in and out of the vaults, which is an important input to the [PrimaryAMMV1](/core-contracts/pamm) contract's pricing mechanism.

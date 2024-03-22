@@ -1,0 +1,5 @@
+{
+  "checked-price-oracle": "CheckedPriceOracle",
+  "iusd-price-oracle": "IUSDPriceOracle",
+  "irelative-price-oracle": "IRelativePriceOracle"
+}

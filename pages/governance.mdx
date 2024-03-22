@@ -1,0 +1,23 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Governance
+
+The Gyroscope protocol utilizes a governance system to manage critical aspects of the ecosystem. This governance model is implemented through two key contracts: [Governable](/governance/governable) and [IGovernable](/governance/igovernable).
+
+The **Governable** contract serves as the base for managing the governor role. It provides the necessary functionality to change the governor, as well as restrict certain actions to only the current governor. This contract ensures that important decisions are made by the designated governor, promoting a secure and controlled evolution of the protocol.
+
+The **IGovernable** interface defines the standard methods for interacting with the governor. This includes the ability to:
+
+- Change the current governor
+- Accept governance transfer
+- Check the current and pending governors
+
+Governa nce in the Gyroscope protocol is crucial for maintaining the integrity and long-term sustainability of the system. It allows the community to collectively make decisions that shape the protocol's future, such as:
+
+- Updating system parameters in the [PAMM](/core-contracts/pamm) contract
+- Registering and deregistering [IGyroVault](/core-contracts/igyro-vault) instances
+- Configuring the [IGyroConfig](/core-contracts/igyro-config) settings
+- Authorizing [IMotherboard](/core-contracts/imotherboard) actions
+- Managing [IReserve](/core-contracts/ireserve) permissions
+
+By utilizing a well-designed governance framework, the Gyroscope protocol can adapt to changing market conditions, incorporate community feedback, and ensure the long-term success of the decentralized ecosystem.

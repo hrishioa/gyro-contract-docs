@@ -1,0 +1,44 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# FixedPoint
+
+The FixedPoint library in the Gyroscope protocol provides a set of utilities for performing fixed-point arithmetic operations. Fixed-point numbers are a way of representing decimal values using integer types, which is particularly useful in smart contract development where floating-point arithmetic is not natively supported.
+
+The FixedPoint library defines a number of useful functions for working with fixed-point numbers, including:
+
+- `divDown`: Performs a division operation, rounding down the result.
+- `divUp`: Performs a division operation, rounding up the result.
+- `mulDown`: Performs a multiplication operation, rounding down the result.
+- `mulUp`: Performs a multiplication operation, rounding up the result.
+- `absSub`: Calculates the absolute difference between two fixed-point numbers.
+
+These functions are used extensively throughout the Gyroscope protocol, particularly in the [PAMM (PrimaryAMMV1)](/core-contracts/pamm) contract, which is responsible for the core AMM pricing mechanism.
+
+For example, the `computeReserveFixedParams` function in the PAMM contract uses the `divDown` and `mulDown` functions from the FixedPoint library to calculate the reserve value for a given redemption level:
+
+```solidity
+function computeReserveFixedParams(
+    uint256 x,
+    uint256 ba,
+    uint256 ya,
+    uint256 alpha,
+    uint256 xu,
+    uint256 xl
+) internal pure returns (uint256) {
+    if (x <= xu) {
+        return ba - x;
+    }
+    if (x <= xl) {
+        return ba - x + (alpha * (x - xu).squareDown()) / TWO;
+    }
+    // x > xl:
+    uint256 rl = ONE - alpha.mulDown(xl - xu);
+    return rl.mulDown(ya - x);
+}
+```
+
+In this example, the `mulDown` function is used to ensure that the calculations are performed with the appropriate rounding behavior, which is important for maintaining the stability and correctness of the AMM pricing algorithm.
+
+The FixedPoint library also provides a number of utility functions, such as `intPowDown` and `sqrt`, which are used throughout the Gyroscope protocol for various calculations and transformations.
+
+Overall, the FixedPoint library is a crucial component of the Gyroscope protocol, providing a reliable and efficient way of performing fixed-point arithmetic operations that are essential for the proper functioning of the AMM and other protocol components.

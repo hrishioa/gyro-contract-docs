@@ -1,0 +1,49 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# IGyroVault
+
+The `IGyroVault` interface is the core contract for the vault components in the Gyroscope protocol. Vaults are one of the key building blocks of the Gyroscope reserve, serving as the entry and exit points for users interacting with the protocol.
+
+Vaults are ERC-20 tokens that represent ownership of the underlying pools (e.g. Balancer, Curve, Uniswap) that make up the Gyroscope reserve. When a user deposits tokens into the Gyroscope protocol, those tokens are allocated to a specific vault, and the user receives the corresponding vault tokens in return. Similarly, when a user wants to redeem their Gyro tokens, they burn their vault tokens to withdraw the underlying tokens.
+
+Let's dive into the key functions and features of the `IGyroVault` interface:
+
+## Vault Type and Underlying Token
+
+The `vaultType()` function returns the type of the vault, which can be one of the following:
+
+- `GENERIC`
+- `BALANCER_CPMM`
+- `BALANCER_2CLP`
+- `BALANCER_3CLP`
+- `BALANCER_ECLP`
+
+This allows the protocol to handle different types of underlying pools, catering to a wide range of DeFi building blocks.
+
+The `underlying()` function returns the address of the token associated with this vault, which is typically an LP token from the underlying pool. This token is the asset that users deposit and withdraw when interacting with the vault.
+
+## Vault Token Management
+
+The `getTokens()` function returns the list of underlying tokens associated with the vault. In the case of an LP token, this would be the individual tokens that make up the pool (e.g. [ETH, DAI] for an ETH/DAI pool).
+
+The `totalUnderlying()` function returns the total amount of underlying tokens held in the vault, and the `exchangeRate()` function provides the exchange rate between the vault token and the underlying tokens.
+
+## Deposit and Withdraw
+
+Users can deposit underlying tokens into the vault using the `deposit()` function, and receive the corresponding vault tokens in return. The `depositFor()` function allows depositing on behalf of another user.
+
+To withdraw, users burn their vault tokens using the `withdraw()` function, and receive the underlying tokens back. The `dryDeposit()` and `dryWithdraw()` functions allow users to simulate these operations without actually executing them.
+
+<Callout type="info">
+The vault contracts are responsible for handling the low-level interactions with the underlying pools, ensuring a consistent and user-friendly interface for interacting with the Gyroscope reserve.
+</Callout>
+
+## Strategy Management
+
+Each vault can be associated with a strategy contract that is responsible for generating yield on the deposited funds. The `strategy()` function returns the address of the current strategy, and the `setStrategy()` function allows updating the strategy through governance.
+
+<Callout type="warning">
+The strategy contracts are critical components of the vaults, as they directly control the underlying tokens. Careful consideration must be given when selecting and updating strategies to ensure the security and stability of the Gyroscope protocol.
+</Callout>
+
+By providing a standardized interface for vaults, the `IGyroVault` contract allows the Gyroscope protocol to seamlessly integrate various DeFi building blocks and strategies, making it a powerful and extensible platform for decentralized finance.

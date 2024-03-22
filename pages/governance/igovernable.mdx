@@ -1,0 +1,29 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# IGovernable
+
+The `IGovernable` interface defines the core functionality for managing the governance of a contract in the Gyroscope protocol. This interface is crucial for ensuring that protocol-level decisions, such as parameter updates or contract upgrades, are controlled and executed through a well-defined governance process.
+
+The `IGovernable` interface provides the following key features:
+
+**Governor Management**
+- The `governor()` function returns the current governor of the contract.
+- The `pendingGovernor()` function returns the pending governor that has been requested but not yet accepted.
+- The `changeGovernor(address newGovernor)` function allows the current governor to request a change to a new governor.
+- The `acceptGovernance()` function allows the pending governor to accept the governance change, making them the new governor.
+
+These functions enable a structured process for transferring governance control, where a new governor must be explicitly proposed and then accepted, providing a layer of security and accountability.
+
+**Governance-Only Access Control**
+The `governanceOnly` modifier ensures that only the current governor can execute a particular function. This is an important access control mechanism that restricts sensitive protocol-level actions to the governance process, preventing unauthorized modifications.
+
+**Events**
+The interface also defines two events that are emitted when governance changes occur:
+- `GovernorChanged(address oldGovernor, address newGovernor)`: Emitted when the governor is changed.
+- `GovernorChangeRequested(address newGovernor)`: Emitted when a governor change is requested.
+
+These events provide a transparent record of governance changes, allowing external parties to track and monitor the protocol's governance evolution.
+
+The `IGovernable` interface is a crucial building block for the Gyroscope protocol, ensuring that the core functionality and decision-making processes are subject to a well-defined and secure governance model. By using this interface, Gyroscope can maintain the flexibility to adapt and evolve over time while preserving the trust and confidence of its users and stakeholders.
+
+For examples of how the `IGovernable` interface is implemented, you can refer to the [Governable](/governance/governable) contract, which serves as a base implementation for governor management.
