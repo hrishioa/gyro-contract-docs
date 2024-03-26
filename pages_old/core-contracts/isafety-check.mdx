@@ -1,0 +1,29 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# ISafetyCheck
+
+The `ISafetyCheck` interface is a crucial component in the Gyroscope protocol, responsible for ensuring the safety and integrity of the minting and redeeming processes. This contract acts as a gatekeeper, verifying that any proposed minting or redeeming operations will not compromise the stability and health of the protocol.
+
+The `ISafetyCheck` interface defines three key functions:
+
+1. `isMintSafe(DataTypes.Order memory order)`: This function checks whether a proposed minting operation is safe to execute. It takes an `Order` struct as input, which contains information about the assets and amounts involved in the minting process. The function returns an empty string if the operation is safe, or an error message if it is not.
+
+2. `isRedeemSafe(DataTypes.Order memory order)`: Similar to the `isMintSafe` function, this checks whether a proposed redeeming operation is safe. It also takes an `Order` struct as input and returns either an empty string or an error message.
+
+3. `checkAndPersistMint(DataTypes.Order memory order)` and `checkAndPersistRedeem(DataTypes.Order memory order)`: These functions perform the same safety checks as `isMintSafe` and `isRedeemSafe`, but they also store any relevant information about the operation for future reference.
+
+<Callout type="info">
+The `DataTypes.Order` struct contains information about the assets and amounts involved in a minting or redeeming operation, as well as a flag indicating whether the operation is a mint or a redeem.
+</Callout>
+
+The safety checks performed by the `ISafetyCheck` interface are crucial for maintaining the stability and health of the Gyroscope protocol. Here are some of the key checks that are typically performed:
+
+- **Price Safety**: The contract ensures that the prices of the assets involved in the operation are within acceptable ranges, particularly for stablecoins, which should be close to their peg.
+- **Rebalancing**: The contract checks that the proposed operation will not lead to significant deviations from the ideal weights of the vaults in the reserve. It ensures that the operation promotes rebalancing towards the ideal weights.
+- **Feasibility**: The contract checks that the requested redeeming operation is feasible, i.e., the reserve has enough tokens to fulfill the request.
+
+By enforcing these safety checks, the Gyroscope protocol can avoid potential issues such as price manipulation, unbalanced vaults, and other vulnerabilities that could compromise the stability and reliability of the system.
+
+The implementation of the `ISafetyCheck` interface is typically provided by a separate contract, such as the `ReserveSafetyManager` contract, which encapsulates the specific logic for performing the safety checks.
+
+Overall, the `ISafetyCheck` interface is a critical piece of the Gyroscope protocol, ensuring that the minting and redeeming processes are carried out in a secure and responsible manner, protecting the interests of the protocol and its users.

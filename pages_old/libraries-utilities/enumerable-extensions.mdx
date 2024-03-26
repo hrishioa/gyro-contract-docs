@@ -1,0 +1,59 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# EnumerableExtensions
+
+The `EnumerableExtensions` library provides a set of utility functions for working with [enumerable sets](https://docs.soliditylang.org/en/v0.8.0/types.html#set-types) and arrays in Solidity. This library is commonly used throughout the Gyroscope protocol to efficiently manage and manipulate collections of addresses and other data types.
+
+## Enumerating Sets
+
+One of the key features of the `EnumerableExtensions` library is the ability to easily iterate over the elements in an enumerable set. This is particularly useful when you need to perform operations on all the members of a set, such as when fetching the list of registered vaults or trusted price oracles.
+
+<Callout type="info">
+Enumerable sets in Solidity provide a convenient way to store unique elements, with the ability to add, remove, and check for membership. However, they lack built-in methods for enumerating their contents, which is where the `EnumerableExtensions` library comes in.
+</Callout>
+
+Here's an example of how you might use the `EnumerableExtensions` library to iterate over the members of an enumerable set:
+
+```solidity
+using EnumerableExtensions for EnumerableSet.AddressSet;
+
+EnumerableSet.AddressSet internal trustedSignerPriceOracles;
+
+function listSignedPriceSource() external view returns (address[] memory) {
+    return trustedSignerPriceOracles.values();
+}
+```
+
+In this example, the `trustedSignerPriceOracles` set is defined as an `EnumerableSet.AddressSet`. The `listSignedPriceSource` function then uses the `values()` method provided by the `EnumerableExtensions` library to return an array containing all the addresses in the set.
+
+## Enumerating Arrays
+
+In addition to sets, the `EnumerableExtensions` library also provides utility functions for working with arrays. For example, the `EnumerableExtensions.concat` function can be used to combine two arrays into a single array:
+
+```solidity
+using EnumerableExtensions for address[];
+
+address[] memory first = new address[](2);
+first[0] = 0x1234567890123456789012345678901234567890;
+first[1] = 0x0987654321098765432109876543210987654321;
+
+address[] memory second = new address[](2);
+second[0] = 0xFEDCBA0987654321FEDCBA0987654321FEDCBA09;
+second[1] = 0x0123456789ABCDEF0123456789ABCDEF0123456;
+
+address[] memory combined = first.concat(second);
+```
+
+In this example, the `concat` function is used to combine the `first` and `second` arrays into a new `combined` array.
+
+## Efficient Storage
+
+One of the key benefits of using the `EnumerableExtensions` library is that it helps to optimize the storage of your contract's state. By using enumerable sets and arrays, you can avoid the need to store and manage collections of data in more complex data structures, such as mappings or nested arrays.
+
+This can lead to significant gas savings, as the Solidity compiler is able to more efficiently optimize the storage and access of your contract's state. Additionally, the `EnumerableExtensions` library provides a number of utility functions that can further improve the efficiency of your contract's operations, such as the `_sort` and `_median` functions.
+
+## Conclusion
+
+The `EnumerableExtensions` library is a powerful tool in the Gyroscope protocol's toolkit, providing a set of efficient and easy-to-use functions for working with collections of data. Whether you're managing a set of registered vaults, tracking trusted price oracles, or performing any other collection-based operations, the `EnumerableExtensions` library can help you write more gas-efficient and maintainable Solidity code.
+
+For more information on the Gyroscope protocol and its various components, be sure to check out the other sections of the [Gyroscope Developer Handbook](/core-contracts/igyro-config).

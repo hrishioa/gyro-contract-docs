@@ -2,47 +2,58 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # IUSDPriceOracle
 
-The `IUSDPriceOracle` interface is a crucial component of the Gyroscope protocol, responsible for providing the USD prices of various assets. This oracle is designed to be a reliable and trusted source of price information, ensuring the accuracy and integrity of the protocol's operations.
+The `IUSDPriceOracle` is a critical component in the Gyroscope protocol, responsible for providing accurate and reliable USD pricing information for the various assets supported in the system. This oracle interface ensures that the Gyroscope's [PAMM (PrimaryAMMV1)](/core-contracts/pamm) contract can perform its pricing calculations based on trusted USD prices.
 
-## Quoting USD Prices
+The `IUSDPriceOracle` interface defines a single function, `getPriceUSD`, which takes an asset address as input and returns the corresponding USD price for that asset. This price is always scaled with 18 decimals, regardless of the source used for the oracle.
 
-The primary function of the `IUSDPriceOracle` is to provide the USD price of a given asset, as demonstrated by the `getPriceUSD` function:
+<Callout type="info">
+The Gyroscope protocol relies on the USD prices provided by the `IUSDPriceOracle` to perform crucial operations such as minting and redemption of the Gyro Dollar (GYD) token. Ensuring the accuracy and reliability of these price feeds is of utmost importance for the protocol's stability and user confidence.
+</Callout>
 
-```solidity
-/// @notice Quotes the USD price of `tokenAddress`
-/// The quoted price is always scaled with 18 decimals regardless of the
-/// source used for the oracle.
-/// @param tokenAddress the asset of which the price is to be quoted
-/// @return the USD price of the asset
-function getPriceUSD(address tokenAddress) external view returns (uint256);
+## Implementing the `IUSDPriceOracle` Interface
+
+To integrate with the Gyroscope protocol, a contract must implement the `IUSDPriceOracle` interface. This means providing a `getPriceUSD` function that can accurately retrieve the USD price for a given asset address.
+
+<Steps>
+### Step 1: Fetch the USD Price from a Trusted Source
+The implementation of the `getPriceUSD` function should fetch the USD price for the input asset from a reliable and trusted source, such as Chainlink or a custom oracle solution. This price feed should be constantly monitored and updated to ensure the prices remain accurate and up-to-date.
+
+### Step 2: Scale the Price to 18 Decimals
+The Gyroscope protocol expects the USD prices to be provided with 18 decimal places, so the implementation should ensure that the retrieved price is scaled accordingly. This can be done using the `FixedPoint` library provided in the Gyroscope codebase, or a similar fixed-point arithmetic library.
+
+### Step 3: Return the Scaled Price
+Finally, the `getPriceUSD` function should return the scaled USD price for the input asset address.
+</Steps>
+
+By implementing the `IUSDPriceOracle` interface, you can seamlessly integrate your price feed into the Gyroscope protocol and ensure that the Gyro Dollar's pricing mechanisms have access to accurate and reliable USD prices.
+
+## Integrating the `IUSDPriceOracle` into the Gyroscope Protocol
+
+The Gyroscope protocol's [PAMM (PrimaryAMMV1)](/core-contracts/pamm) contract uses the `IUSDPriceOracle` to perform its pricing calculations. The PAMM contract calls the `getPriceUSD` function to retrieve the current USD price for each asset involved in a minting or redemption operation.
+
+<Callout type="info">
+It's important to note that the `IUSDPriceOracle` is just one component of the Gyroscope protocol's oracle integration. The protocol also utilizes an [IRelativePriceOracle](/oracles/irelative-price-oracle) to provide relative pricing information between asset pairs.
+</Callout>
+
+By integrating a reliable `IUSDPriceOracle` implementation, you can ensure that the Gyroscope protocol's pricing mechanisms are based on accurate and up-to-date USD prices, contributing to the overall stability and reliability of the Gyro Dollar.
+
+## Example Implementation: Chainlink USD Price Oracle
+
+One example implementation of the `IUSDPriceOracle` could be a contract that fetches USD prices from the Chainlink network. Here's a high-level overview of how such an implementation might look:
+
+```mermaid
+graph LR
+  A[Gyroscope Protocol] --> B[IUSDPriceOracle]
+  B --> C[Chainlink USD Price Oracle]
+  C --> D[Chainlink Price Feeds]
 ```
 
-This function takes the address of the asset as input and returns the corresponding USD price, scaled to 18 decimal places. This ensures that the prices are consistent and can be easily compared, regardless of the underlying data source or the token's native decimal places.
+The Chainlink USD Price Oracle contract would have the following key components:
 
-> **Callout**
-> The `IUSDPriceOracle` abstracts away the complexities of fetching and processing the raw price data, providing a simple and reliable interface for the Gyroscope protocol to consume.
+- A function to fetch the latest USD price for a given asset from the Chainlink Price Feeds
+- Logic to scale the retrieved price to 18 decimal places
+- An implementation of the `getPriceUSD` function from the `IUSDPriceOracle` interface
 
-## Batch Price Fetching
+This implementation would allow the Gyroscope protocol to leverage the trusted and reliable price feeds provided by the Chainlink network, ensuring that the Gyro Dollar's pricing mechanisms are based on accurate and up-to-date information.
 
-In addition to individual price fetching, the `IUSDPriceOracle` also provides a batch price fetching mechanism through the `getPricesUSD` function:
-
-```solidity
-/// @notice Quotes the USD price of `baseAssets`
-/// The quoted prices is always scaled with 18 decimals regardless of the
-/// source used for the oracle.
-/// @param baseAssets the assets of which the price is to be quoted
-/// @return the USD prices of the asset
-function getPricesUSD(address[] memory baseAssets) external view returns (uint256[] memory);
-```
-
-This function takes an array of asset addresses as input and returns an array of the corresponding USD prices. This is particularly useful when you need to fetch the prices of multiple assets at once, as it can reduce the number of contract calls and improve the overall efficiency of your application.
-
-## Integrating with the Gyroscope Protocol
-
-The `IUSDPriceOracle` is a key component of the Gyroscope protocol and is used in various parts of the system, such as:
-
-- [PrimaryAMMV1](/pamm) - The primary AMM pricing mechanism uses the `IUSDPriceOracle` to determine the value of the assets in the reserve.
-- [CheckedPriceOracle](/checked-price-oracle) - This oracle wraps the `IUSDPriceOracle` and performs additional checks to ensure the reliability of the prices.
-- [IMotherboard](/imotherboard) - The central contract that connects the different components of the Gyroscope protocol, including the `IUSDPriceOracle`.
-
-By integrating the `IUSDPriceOracle` into the core of the Gyroscope protocol, the developers have ensured that the system has access to accurate and trustworthy price information, which is essential for the proper functioning of the decentralized stablecoin and other protocol features.
+By integrating a well-designed `IUSDPriceOracle` implementation, the Gyroscope protocol can maintain the stability and reliability of the Gyro Dollar, providing users with a trustworthy decentralized stablecoin.

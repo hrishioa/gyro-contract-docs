@@ -2,60 +2,67 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # ConfigHelpers
 
-The `ConfigHelpers` library provides a set of helper functions for interacting with the [IGyroConfig](/igyro-config) contract, which is responsible for storing and managing the global configuration settings of the Gyroscope protocol.
+The `ConfigHelpers` library provides a set of helper functions for interacting with the Gyroscope configuration stored in the `IGyroConfig` contract. This contract serves as the central repository for all global configuration settings used throughout the Gyroscope protocol.
 
-These helpers simplify the process of reading and writing configuration values, making it easier for other contracts to access and update the protocol's settings.
+The `ConfigHelpers` library is designed to simplify the process of retrieving, setting, and updating configuration values, making it easier for developers to work with the Gyroscope protocol's configuration system.
 
-## Getting Configuration Values
+## Retrieving Configuration Values
 
-The `ConfigHelpers` library offers several functions for retrieving configuration values from the [IGyroConfig](/igyro-config) contract:
+The `ConfigHelpers` library provides several functions for retrieving configuration values from the `IGyroConfig` contract:
 
-- `getUint(IGyroConfig config, bytes32 key)`: Returns the value associated with the given `key` as a `uint256`.
-- `getUint(IGyroConfig config, bytes32 key, uint256 defaultValue)`: Returns the value associated with the given `key`, or the provided `defaultValue` if the key is not found.
-- `getAddress(IGyroConfig config, bytes32 key)`: Returns the address value associated with the given `key`.
-- `getAddress(IGyroConfig config, bytes32 key, address defaultValue)`: Returns the address value associated with the given `key`, or the provided `defaultValue` if the key is not found.
+- `getUint(bytes32 key)`: Retrieves the `uint256` value associated with the specified `key`.
+- `getUint(bytes32 key, uint256 defaultValue)`: Retrieves the `uint256` value associated with the specified `key`, or the provided `defaultValue` if the key is not found.
+- `getAddress(bytes32 key)`: Retrieves the `address` value associated with the specified `key`.
+- `getAddress(bytes32 key, address defaultValue)`: Retrieves the `address` value associated with the specified `key`, or the provided `defaultValue` if the key is not found.
 
-Here's an example of how to use these functions:
-
-<Callout type="info">
-The `IGyroConfig` contract is passed as a parameter to these functions, as they are designed to be used across multiple contracts in the Gyroscope protocol.
-</Callout>
+Here's an example of how you might use these functions:
 
 ```solidity
-IGyroConfig config = IGyroConfig(0x...); // Address of the IGyroConfig contract
-
-uint256 xuBar = ConfigHelpers.getUint(config, keccak256("xuBar"));
-address motherboard = ConfigHelpers.getAddress(config, keccak256("motherboard"));
+bytes32 key = keccak256(abi.encodePacked("PAMM_ALPHA_BAR"));
+uint256 alphaBar = ConfigHelpers.getUint(key);
 ```
+
+In this example, we're retrieving the value associated with the `"PAMM_ALPHA_BAR"` configuration key, which is likely the alpha bar parameter used in the PAMM (Primary AMM) contract.
+
+<Callout type="info">
+The `ConfigHelpers` library uses the `keccak256` hash function to convert a human-readable configuration key into the corresponding `bytes32` value used by the `IGyroConfig` contract. This ensures that the keys are standardized and consistent throughout the protocol.
+</Callout>
 
 ## Setting Configuration Values
 
-The `ConfigHelpers` library also provides functions for setting configuration values in the [IGyroConfig](/igyro-config) contract:
+The `ConfigHelpers` library also provides functions for setting configuration values in the `IGyroConfig` contract:
 
-- `setUint(IGyroConfig config, bytes32 key, uint256 newValue)`: Sets the value associated with the given `key` to the `newValue`.
-- `setAddress(IGyroConfig config, bytes32 key, address newValue)`: Sets the address value associated with the given `key` to the `newValue`.
+- `setUint(bytes32 key, uint256 newValue)`: Sets the `uint256` value associated with the specified `key` to the provided `newValue`.
+- `setAddress(bytes32 key, address newValue)`: Sets the `address` value associated with the specified `key` to the provided `newValue`.
 
-Here's an example of how to use these functions:
+Here's an example of how you might use these functions:
 
 ```solidity
-IGyroConfig config = IGyroConfig(0x...); // Address of the IGyroConfig contract
-
-ConfigHelpers.setUint(config, keccak256("alphaBar"), 0.5e18);
-ConfigHelpers.setAddress(config, keccak256("motherboard"), 0x...); // Address of the motherboard contract
+bytes32 key = keccak256(abi.encodePacked("PAMM_ALPHA_BAR"));
+ConfigHelpers.setUint(key, 0.5e18);
 ```
 
+In this example, we're setting the `"PAMM_ALPHA_BAR"` configuration key to the value of `0.5e18`, which is likely the new alpha bar parameter for the PAMM contract.
+
 <Callout type="warning">
-Remember that setting configuration values is typically a privileged action, controlled by the Gyroscope protocol's governance. Make sure you have the necessary permissions before calling these functions.
+Configuration changes in the `IGyroConfig` contract are typically governed by the Gyroscope protocol's governance system. Developers should ensure that they have the necessary permissions and approvals before attempting to update configuration values.
 </Callout>
 
-## Utility Functions
+## Unset and Freeze Configuration Keys
 
-The `ConfigHelpers` library also includes some utility functions to simplify working with the [IGyroConfig](/igyro-config) contract:
+The `ConfigHelpers` library also provides functions for unset and freeze configuration keys in the `IGyroConfig` contract:
 
-- `hasKey(IGyroConfig config, bytes32 key)`: Returns `true` if the given `key` is present in the configuration.
-- `listKeys(IGyroConfig config)`: Returns an array of all the keys currently set in the configuration.
-- `getConfigMeta(IGyroConfig config, bytes32 key)`: Returns the metadata associated with the given `key`, including its data type and whether it's frozen.
+- `unset(bytes32 key)`: Removes the configuration value associated with the specified `key`.
+- `freeze(bytes32 key)`: Freezes the configuration value associated with the specified `key`, making it impossible to update or unset the value.
 
-These functions can be useful when iterating over the protocol's configuration or checking the status of specific settings.
+These functions can be useful for managing the protocol's configuration over time, such as when certain configuration values become obsolete or need to be permanently locked.
 
-By using the `ConfigHelpers` library, you can easily interact with the [IGyroConfig](/igyro-config) contract and manage the Gyroscope protocol's global configuration settings from within your contracts. This helps maintain a consistent and organized approach to configuration management across the entire system.
+<Callout type="info">
+Unset and freeze operations on configuration keys are also typically governed by the Gyroscope protocol's governance system. Developers should ensure that they have the necessary permissions and approvals before attempting to unset or freeze configuration keys.
+</Callout>
+
+## Conclusion
+
+The `ConfigHelpers` library provides a convenient and standardized way for developers to interact with the Gyroscope protocol's configuration system. By abstracting away the low-level details of the `IGyroConfig` contract, the `ConfigHelpers` library helps to simplify the process of managing configuration values, making it easier to build applications and services on top of the Gyroscope protocol.
+
+For more information on the Gyroscope protocol's architecture and other core components, be sure to check out the [Architecture and Interactions](/architecture-interactions) and [Core Contracts](/core-contracts) sections of this documentation.

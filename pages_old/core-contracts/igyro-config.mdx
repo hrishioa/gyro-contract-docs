@@ -1,0 +1,55 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# IGyroConfig
+
+The `IGyroConfig` interface is the central point for storing and managing the global configuration settings of the Gyroscope protocol. This contract acts as the single source of truth for all configurable parameters, allowing the protocol to be easily updated and modified over time.
+
+<Callout type="info">
+The `IGyroConfig` contract is designed to be an immutable, frozen contract, ensuring that the configuration settings cannot be tampered with or accidentally changed.
+</Callout>
+
+## Global Configuration Management
+
+The `IGyroConfig` interface provides a set of functions for interacting with the global configuration:
+
+- `getUint(bytes32 key)`: Retrieves a `uint256` value associated with the given `key`.
+- `getAddress(bytes32 key)`: Retrieves an `address` value associated with the given `key`.
+- `setUint(bytes32 key, uint256 newValue)`: Updates a `uint256` configuration value.
+- `setAddress(bytes32 key, address newValue)`: Updates an `address` configuration value.
+- `unset(bytes32 key)`: Removes a configuration value associated with the given `key`.
+- `freeze(bytes32 key)`: Permanently freezes a configuration value, making it impossible to update or unset.
+
+All configuration changes are accompanied by events, such as `ConfigChanged` and `ConfigFrozen`, to ensure transparency and auditability.
+
+## Using the IGyroConfig Interface
+
+To use the `IGyroConfig` interface, you'll need to interact with the contract directly. Here's an example of how you might retrieve a configuration value:
+
+```solidity
+// Assuming you have an instance of the IGyroConfig contract
+IGyroConfig config = IGyroConfig(address(0x123456789));
+
+// Retrieve a uint256 configuration value
+uint256 xuBar = config.getUint(bytes32("xuBar"));
+
+// Retrieve an address configuration value
+address motherboard = config.getAddress(bytes32("motherboard"));
+```
+
+You can also update configuration values, though this should typically be done through the protocol's governance process:
+
+```solidity
+// Assuming you have the required governance permissions
+config.setUint(bytes32("xuBar"), 0.8e18);
+config.setAddress(bytes32("motherboard"), address(0x987654321));
+```
+
+In addition to the basic configuration management functions, the `IGyroConfig` interface also provides a few other useful features:
+
+- **Listing Registered Keys**: The `listKeys()` function returns a list of all the configuration keys that have been registered in the contract.
+- **Checking Key Existence**: The `hasKey(bytes32 key)` function allows you to determine whether a particular configuration key has been set.
+- **Retrieving Key Metadata**: The `getConfigMeta(bytes32 key)` function returns metadata about a configuration key, including its data type and whether it has been frozen.
+
+By using the `IGyroConfig` interface, you can ensure that your interactions with the Gyroscope protocol are consistent and reliable, as all configuration settings are centrally managed and controlled.
+
+Remember, the `IGyroConfig` contract is a critical component of the Gyroscope protocol, as it governs the fundamental parameters that define the behavior of the system. Any changes to these settings should be carefully considered and executed through the proper governance channels.

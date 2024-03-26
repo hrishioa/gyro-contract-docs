@@ -1,0 +1,96 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# PAMM (PrimaryAMMV1)
+
+The **PAMM (PrimaryAMMV1)** is the core contract responsible for the primary automated market making (AMM) pricing mechanism in the Gyroscope protocol. It implements the pricing algorithm described in the Gyroscope whitepaper, which aims to provide a stable and sustainable token price for the Gyro Dollar (GYD) stablecoin.
+
+The PAMM contract is designed to handle the minting and redemption of GYD tokens, ensuring that the token price remains close to the $1 target value. It does this by adjusting the redemption level and reserve value of the protocol, based on the current state of the system.
+
+<Callout type="info">
+The PAMM contract is a key component of the Gyroscope protocol, as it is responsible for maintaining the stability and integrity of the GYD token. It works closely with other core contracts, such as the [IMotherboard](/imotherboard) and [IReserve](/ireserve), to manage the overall operation of the protocol.
+</Callout>
+
+## Architecture and Functionality
+
+The PAMM contract is structured around several key concepts and mechanisms:
+
+### State Variables
+The PAMM contract maintains the following state variables:
+
+- `systemParams`: The configurable parameters that define the behavior of the pricing algorithm, such as the `alphaBar`, `xuBar`, `thetaBar`, and `outflowMemory`.
+- `redemptionLevel`: The current redemption level of the protocol, which represents the total amount of GYD tokens that have been minted and redeemed.
+- `lastRedemptionBlock`: The block number of the last redemption operation.
+
+### Pricing Algorithm
+The pricing algorithm implemented in the PAMM contract is based on the mathematical model described in the Gyroscope whitepaper. It defines several regions of operation, each with its own set of rules for calculating the reserve value and redemption amount.
+
+<Callout type="info">
+You can find more details about the pricing algorithm in the [Gyroscope whitepaper](https://gyrostable.com/whitepaper.pdf).
+</Callout>
+
+The key steps in the pricing algorithm are:
+
+1. Compute the current state of the system, including the normalized redemption level, reserve value, and total Gyro supply.
+2. Determine the region of operation based on the current state.
+3. Calculate the anchored reserve value for the current state, using the formulas and thresholds defined for the specific region.
+4. Compute the amount to redeem, given the requested GYD amount and the current state.
+
+### Minting and Redemption
+The PAMM contract provides two main functions for interacting with the pricing mechanism:
+
+<Steps>
+### Step 1: Minting GYD Tokens
+The `computeMintAmount` and `mint` functions allow users to mint new GYD tokens by depositing USD-denominated assets. The amount of GYD minted is determined by the current state of the system and the pricing algorithm.
+
+### Step 2: Redeeming GYD Tokens
+The `computeRedeemAmount` and `redeem` functions allow users to redeem their GYD tokens in exchange for USD-denominated assets. The amount of assets received is calculated based on the current state of the system and the pricing algorithm.
+</Steps>
+
+These functions work closely with the [IMotherboard](/imotherboard) and [IReserve](/ireserve) contracts to manage the overall minting and redemption process.
+
+## Integration with Other Contracts
+
+The PAMM contract is designed to integrate seamlessly with other core contracts in the Gyroscope protocol. Some key interactions include:
+
+- **IMotherboard**: The PAMM contract receives minting and redemption requests from the Motherboard, which is the central entry point for users interacting with the protocol.
+- **IReserve**: The PAMM contract updates the redemption level and reserve value, which are then reflected in the state of the Reserve contract.
+- **IGyroConfig**: The PAMM contract reads configuration parameters, such as the pricing algorithm parameters, from the GyroConfig contract.
+
+These interactions are crucial for maintaining the overall stability and consistency of the Gyroscope protocol.
+
+## Examples
+
+Here's an example of how the PAMM contract might be used to mint GYD tokens:
+
+```solidity
+// Assume we have the following setup
+address motherboard = 0x1234567890abcdef;
+address reserve = 0x0987654321fedcba;
+address gyroConfig = 0xfedcba0987654321;
+
+// Create an instance of the PAMM contract
+PrimaryAMMV1 pamm = new PrimaryAMMV1(
+    0xdeadbeef, // Governor address
+    gyroConfig, // GyroConfig address
+    Params({
+        alphaBar: 0.9e18,
+        xuBar: 0.8e18,
+        thetaBar: 0.95e18,
+        outflowMemory: 0.95e18
+    })
+);
+
+// Mint 1000 USD worth of GYD tokens
+uint256 usdAmount = 1000e18;
+uint256 mintedGYD = pamm.mint(usdAmount, reserve);
+```
+
+In this example, we first create an instance of the PAMM contract, passing in the necessary configuration parameters and the address of the GyroConfig contract.
+
+We then call the `mint` function, passing in the USD amount we want to deposit (1000 USD in this case) and the address of the Reserve contract. The PAMM contract will calculate the appropriate amount of GYD tokens to mint and return the minted amount.
+
+This integration with the Motherboard and Reserve contracts is a key part of the PAMM contract's functionality, as it allows users to seamlessly interact with the Gyroscope protocol's minting and redemption mechanisms.
+
+## Conclusion
+
+The PAMM (PrimaryAMMV1) contract is a crucial component of the Gyroscope protocol, responsible for managing the pricing and stability of the GYD stablecoin. By implementing a sophisticated pricing algorithm and integrating with other core contracts, the PAMM contract ensures that the Gyroscope protocol can maintain a stable and reliable token price, even in the face of changing market conditions.

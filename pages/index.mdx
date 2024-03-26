@@ -2,22 +2,14 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Introduction
 
-Gyroscope is a decentralized protocol that aims to provide a robust stablecoin and automated market maker (AMM) system. At the heart of Gyroscope is the [Primary AMM](/core-contracts/pamm) (PAMM), which is responsible for the pricing mechanism of the protocol's native token, the Gyro Dollar (GYD).
+The Gyroscope protocol is a decentralized stablecoin ecosystem built on the Ethereum blockchain. It aims to provide a stable, scalable, and efficient medium of exchange for the DeFi ecosystem.
 
-The PAMM contract utilizes a novel pricing curve that aims to maintain the GYD's peg to the US dollar, even in the face of volatile market conditions. This is achieved through a combination of dynamic parameters and advanced mathematical modeling, which is explained in detail in the [PAMM](/core-contracts/pamm) section.
+At the core of the Gyroscope protocol is the **Primary Automated Market Maker (PAMM)**, which is responsible for managing the minting and redemption of the GYD stablecoin. The PAMM uses a novel pricing mechanism to maintain the peg of GYD to the US dollar, while also providing liquidity and price stability.
 
-To ensure the safety and stability of the protocol, Gyroscope also includes several other key components:
+The Gyroscope protocol also includes a **Reserve** component, which is a collection of vaults that hold the underlying assets backing the GYD stablecoin. These vaults can be of different types, such as Balancer pools or Curve pools, and are managed by the Gyroscope **Motherboard** contract.
 
-- [IGyroConfig](/core-contracts/igyro-config): A contract that stores and manages the global configuration settings for the protocol.
-- [IGyroVault](/core-contracts/igyro-vault): An interface for the vault components that make up the Gyroscope reserve.
-- [IMotherboard](/core-contracts/imotherboard): The central contract that coordinates the different pieces of the protocol.
-- [IReserve](/core-contracts/ireserve): The contract responsible for managing token deposits and withdrawals.
-- [ISafetyCheck](/core-contracts/isafety-check): An interface for checking the safety of mint and redeem operations.
+<Callout type="info">
+The Gyroscope protocol is designed to be highly flexible and extensible, allowing for the integration of various third-party DeFi protocols and services.
+</Callout>
 
-These core contracts work together to provide a secure and decentralized stablecoin solution, with the [Oracles](/oracles) subsection explaining the price feeds and price checking mechanisms in more detail.
-
-Throughout the Gyroscope protocol, various [Libraries and Utilities](/libraries-utilities) are used to handle common tasks, such as fixed-point arithmetic, flow calculations, and configuration management.
-
-Finally, the [Governance](/governance) section covers the contracts and interfaces related to the protocol's governance model, ensuring that the system can be updated and improved over time.
-
-By understanding these core components, Gyroscope developers and contributors will be well-equipped to build on and enhance the functionality of this decentralized stablecoin ecosystem.
+To understand the Gyroscope protocol in more detail, let's dive into the [Architecture and Interactions](/architecture-interactions) section, where we'll explore the different components and their interactions.

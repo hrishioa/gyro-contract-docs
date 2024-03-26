@@ -2,33 +2,60 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # CheckedPriceOracle
 
-The **CheckedPriceOracle** contract is a crucial component in the Gyroscope protocol, responsible for providing reliable and secure asset prices. This oracle performs various checks on the asset prices to ensure that the prices used within the protocol are accurate and free from manipulation.
+The **CheckedPriceOracle** is a key component of the Gyroscope protocol that provides a robust and reliable way to obtain the USD price of various assets. It plays a crucial role in the protocol's pricing mechanism, ensuring that the prices used for minting and redeeming the Gyro Dollar (GYD) token are accurate and grounded in real-world values.
 
-The CheckedPriceOracle contract serves several important functions:
+The CheckedPriceOracle contract combines data from multiple sources, including Chainlink and other trusted price oracles, to arrive at a reliable USD price for each asset. It performs various checks and validations to ensure the integrity of the prices, such as:
 
-1. **Fetching USD Prices**: The contract provides the ability to fetch the USD price of any asset through the `getPriceUSD` and `getPricesUSD` functions. These functions ensure that the prices are always scaled with 18 decimals, regardless of the source used for the oracle.
+1. **Batch Relative Price Check**: The contract checks the relative prices between pairs of assets, ensuring that the inferred USD prices are consistent with the observed relative prices. This helps mitigate potential manipulation or stale price issues.
 
-2. **Relative Price Checks**: The contract also fetches the relative price between any two assets using the `getRelativePrice` function from the [IRelativePriceOracle](/oracles/irelative-price-oracle) interface. These relative price checks are crucial for ensuring the consistency of the overall pricing within the protocol.
+2. **Price Level Threshold Check**: The contract compares the WETH/USD price obtained from the oracle sources to a set of signed prices from trusted third-party providers. This helps ensure that the root price used by the protocol is well-grounded and not subject to extreme volatility.
 
-3. **Price Level Checks**: The contract performs a series of checks on the WETH price to ensure that it is grounded and consistent with prices from trusted external oracles. This helps to prevent potential manipulation or unexpected price movements that could disrupt the protocol's operations.
+3. **Epsilon-based Deviation Check**: The contract ensures that the relative prices of assets do not deviate too much from their expected values, as defined by the protocol's configuration parameters. This helps maintain a stable and consistent pricing environment.
 
 <Callout type="info">
-The price level checks in the CheckedPriceOracle are based on the analysis and algorithms described in the Gyroscope whitepaper. These checks help to ensure the reliability and stability of the protocol's pricing mechanisms.
+The specific configuration parameters, such as the maximum allowed deviation and the list of trusted price providers, are managed through the [IGyroConfig](/igyro-config/igyro-config) interface, which allows for governance-controlled updates.
 </Callout>
 
-The CheckedPriceOracle contract is designed to be highly configurable and extensible. It allows the protocol's governance to update the USD and relative price oracles, as well as manage the list of trusted price sources. This flexibility ensures that the protocol can adapt to changes in the DeFi ecosystem and maintain the integrity of its pricing data.
+The CheckedPriceOracle is designed to be highly flexible and extensible, allowing the protocol to adapt to changing market conditions and incorporate new data sources as needed. It serves as a crucial component in the Gyroscope protocol's commitment to providing a stable and reliable decentralized stablecoin.
+
+## Key Features
+
+The CheckedPriceOracle contract includes the following key features:
+
+- **Batch Price Retrieval**: The `getPricesUSD` function allows retrieving the USD prices for a batch of assets in a single call, optimizing gas usage and reducing the number of on-chain interactions.
+
+- **Metadata Retrieval**: The `getPricesUSDWithMetadata` function returns additional metadata along with the prices, such as the signed prices from trusted providers and the time-weighted average prices (TWAPs) used for the relative price checks.
+
+- **Relative Price Consistency Checks**: The contract performs a series of checks to ensure the relative prices between assets are consistent with the inferred USD prices, helping to mitigate potential manipulation or stale price issues.
+
+- **Price Level Grounding**: The contract compares the WETH/USD price obtained from the oracle sources to a set of signed prices from trusted third-party providers, ensuring that the root price used by the protocol is well-grounded and not subject to extreme volatility.
+
+- **Governance-controlled Configuration**: The protocol's configuration parameters, such as the trusted price providers and the maximum allowed deviation, are managed through the [IGyroConfig](/igyro-config/igyro-config) interface, allowing for governance-controlled updates.
+
+- **Extensibility**: The CheckedPriceOracle is designed to be highly flexible and extensible, allowing the protocol to adapt to changing market conditions and incorporate new data sources as needed.
+
+## How it Works
+
+The CheckedPriceOracle contract operates in the following way:
 
 <Steps>
-### Step 1: Fetching USD Prices
-The `getPriceUSD` and `getPricesUSD` functions in the CheckedPriceOracle contract are used to retrieve the USD price of one or more assets, respectively. These functions ensure that the prices are always scaled with 18 decimals, making it easier to integrate with other parts of the Gyroscope protocol.
+### Step 1: Batch Price Retrieval
 
-### Step 2: Relative Price Checks
-The `getRelativePrice` function in the CheckedPriceOracle contract retrieves the relative price between two assets. These relative price checks are crucial for maintaining the consistency of the protocol's pricing mechanisms. The contract also includes functions for managing the list of assets that are used for these relative price checks.
+The `getPricesUSD` function is called with an array of asset addresses. The contract then retrieves the USD prices for each of these assets from the underlying [IUSDPriceOracle](/iusd-price-oracle/iusd-price-oracle) implementation.
 
-### Step 3: Price Level Checks
-The CheckedPriceOracle contract performs a series of checks on the WETH price to ensure that it is grounded and consistent with prices from trusted external oracles. This helps to prevent potential manipulation or unexpected price movements that could disrupt the protocol's operations. The contract uses a robust algorithm to compute the true WETH price based on the signed prices from trusted oracles and the time-weighted average prices (TWAPs) from various sources.
+### Step 2: Relative Price Check
+
+The contract then performs a batch relative price check using the [IRelativePriceOracle](/irelative-price-oracle/irelative-price-oracle) implementation. This involves calculating the relative prices between pairs of assets and ensuring they are consistent with the inferred USD prices.
+
+### Step 3: Price Level Threshold Check
+
+The contract compares the WETH/USD price obtained from the oracle sources to a set of signed prices from trusted third-party providers. This helps ensure that the root price used by the protocol is well-grounded and not subject to extreme volatility.
+
+### Step 4: Epsilon-based Deviation Check
+
+Finally, the contract checks that the relative prices of assets do not deviate too much from their expected values, as defined by the protocol's configuration parameters. This helps maintain a stable and consistent pricing environment.
 </Steps>
 
-The CheckedPriceOracle contract is a critical component of the Gyroscope protocol, ensuring the reliability and security of the asset prices used throughout the system. Its flexibility and extensibility allow the protocol to adapt to changing market conditions and maintain the integrity of its pricing mechanisms.
+The CheckedPriceOracle contract is a crucial component of the Gyroscope protocol, ensuring the integrity and reliability of the asset prices used for minting and redeeming the GYD token. By combining data from multiple sources and performing rigorous validations, it helps provide a stable and trustworthy pricing mechanism for the protocol.
 
-For more information on the other core contracts in the Gyroscope protocol, please refer to the [Core Contracts](/core-contracts) section.
+For more information on the Gyroscope protocol's architecture and interactions, please refer to the [Architecture and Interactions](/architecture-interactions/high-level-architecture) section. Additionally, the [IGyroConfig](/igyro-config/igyro-config) interface provides details on how the protocol's configuration parameters are managed.

@@ -1,0 +1,7 @@
+{
+  "enumerable-extensions": "EnumerableExtensions",
+  "flow": "Flow",
+  "config-helpers": "ConfigHelpers",
+  "logexp-math": "LogExpMath",
+  "fixed-point": "FixedPoint"
+}

@@ -2,48 +2,46 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # IGyroVault
 
-The `IGyroVault` interface is the core contract for the vault components in the Gyroscope protocol. Vaults are one of the key building blocks of the Gyroscope reserve, serving as the entry and exit points for users interacting with the protocol.
+The `IGyroVault` interface defines the standard interface for a vault component within the Gyroscope protocol. Each vault is a ERC-20 token that represents the ownership of the underlying liquidity pool (e.g. Balancer, Curve, Uniswap) deposited in the vault.
 
-Vaults are ERC-20 tokens that represent ownership of the underlying pools (e.g. Balancer, Curve, Uniswap) that make up the Gyroscope reserve. When a user deposits tokens into the Gyroscope protocol, those tokens are allocated to a specific vault, and the user receives the corresponding vault tokens in return. Similarly, when a user wants to redeem their Gyro tokens, they burn their vault tokens to withdraw the underlying tokens.
+The key responsibilities of the `IGyroVault` interface are:
 
-Let's dive into the key functions and features of the `IGyroVault` interface:
+1. **Deposit and Withdraw Liquidity**: Allows users to deposit and withdraw the underlying liquidity pool tokens in exchange for the vault's ERC-20 tokens. This is done through the `deposit()`, `depositFor()`, `withdraw()` and `dryWithdraw()` functions.
 
-## Vault Type and Underlying Token
+2. **Vault Token Metadata**: Provides information about the vault's token, such as the name, symbol, and decimals through standard ERC-20 metadata functions.
 
-The `vaultType()` function returns the type of the vault, which can be one of the following:
+3. **Underlying Token Information**: Allows retrieving information about the underlying tokens associated with the vault through the `underlying()` and `getTokens()` functions.
 
-- `GENERIC`
-- `BALANCER_CPMM`
-- `BALANCER_2CLP`
-- `BALANCER_3CLP`
-- `BALANCER_ECLP`
+4. **Total Underlying Balance**: Exposes the total amount of underlying tokens held by the vault through the `totalUnderlying()` function.
 
-This allows the protocol to handle different types of underlying pools, catering to a wide range of DeFi building blocks.
+5. **Exchange Rate**: Provides the current exchange rate between the vault's token and the underlying tokens through the `exchangeRate()` function.
 
-The `underlying()` function returns the address of the token associated with this vault, which is typically an LP token from the underlying pool. This token is the asset that users deposit and withdraw when interacting with the vault.
+6. **Strategy Management**: Allows the governance to set the address of the strategy contract to be used for the vault through the `setStrategy()` function.
 
-## Vault Token Management
+7. **Deployment Metadata**: Exposes the block number at which the vault was deployed through the `deployedAt()` function.
 
-The `getTokens()` function returns the list of underlying tokens associated with the vault. In the case of an LP token, this would be the individual tokens that make up the pool (e.g. [ETH, DAI] for an ETH/DAI pool).
+Here's an example of how the `deposit()` function can be used:
 
-The `totalUnderlying()` function returns the total amount of underlying tokens held in the vault, and the `exchangeRate()` function provides the exchange rate between the vault token and the underlying tokens.
+<Steps>
+### Step 1
 
-## Deposit and Withdraw
+To deposit underlying tokens into the vault, the user first needs to approve the vault contract to spend the required amount of underlying tokens on their behalf:
 
-Users can deposit underlying tokens into the vault using the `deposit()` function, and receive the corresponding vault tokens in return. The `depositFor()` function allows depositing on behalf of another user.
+```solidity
+IERC20(underlyingToken).approve(vaultAddress, underlyingAmount);
+```
 
-To withdraw, users burn their vault tokens using the `withdraw()` function, and receive the underlying tokens back. The `dryDeposit()` and `dryWithdraw()` functions allow users to simulate these operations without actually executing them.
+### Step 2
 
-<Callout type="info">
-The vault contracts are responsible for handling the low-level interactions with the underlying pools, ensuring a consistent and user-friendly interface for interacting with the Gyroscope reserve.
-</Callout>
+Then, the user can call the `deposit()` function on the vault, passing the amount of underlying tokens to deposit and the minimum number of vault tokens they are willing to receive:
 
-## Strategy Management
+```solidity
+uint256 vaultTokensReceived = IGyroVault(vaultAddress).deposit(underlyingAmount, minVaultTokensOut);
+```
 
-Each vault can be associated with a strategy contract that is responsible for generating yield on the deposited funds. The `strategy()` function returns the address of the current strategy, and the `setStrategy()` function allows updating the strategy through governance.
+The function will transfer the underlying tokens from the user to the vault, and mint the corresponding amount of vault tokens to the user's address. The returned `vaultTokensReceived` value represents the actual amount of vault tokens minted.
+</Steps>
 
-<Callout type="warning">
-The strategy contracts are critical components of the vaults, as they directly control the underlying tokens. Careful consideration must be given when selecting and updating strategies to ensure the security and stability of the Gyroscope protocol.
-</Callout>
+The `IGyroVault` interface is a crucial component of the Gyroscope protocol, as it provides a standardized way for users to interact with the underlying liquidity pools through the vault's ERC-20 token. This abstraction allows for greater flexibility and composability within the broader Gyroscope ecosystem.
 
-By providing a standardized interface for vaults, the `IGyroVault` contract allows the Gyroscope protocol to seamlessly integrate various DeFi building blocks and strategies, making it a powerful and extensible platform for decentralized finance.
+For more information on the Gyroscope protocol architecture and how the `IGyroVault` fits into the bigger picture, please refer to the [Architecture and Interactions](/architecture-interactions/high-level-architecture) section.

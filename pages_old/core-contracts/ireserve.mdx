@@ -1,0 +1,51 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# The IReserve Interface
+
+The `IReserve` interface is a crucial component of the Gyroscope protocol, responsible for managing the deposit and withdrawal of tokens in the protocol's reserve. This reserve serves as the backing for the Gyroscope stablecoin (GYD) and enables the core functionality of the Gyroscope ecosystem.
+
+The `IReserve` interface defines the following key features:
+
+## Deposit and Withdrawal of Tokens
+The primary functions of the `IReserve` interface are `depositToken` and `withdrawToken`. These allow authorized accounts, known as "managers," to deposit and withdraw tokens from the reserve. This is an essential mechanism for managing the backing of the GYD stablecoin and ensuring the protocol's stability.
+
+<Callout type="info">
+The list of authorized managers is stored in the `managers()` function, which returns an array of addresses. Managers can be added or removed using the `addManager` and `removeManager` functions, respectively.
+</Callout>
+
+## Event Logging
+The `IReserve` interface emits two key events to log deposit and withdrawal activities:
+
+- `Deposit`: This event is emitted whenever a token is deposited into the reserve, recording the address of the depositor, the token address, and the amount deposited.
+- `Withdraw`: This event is emitted whenever a token is withdrawn from the reserve, recording the address of the withdrawer, the token address, and the amount withdrawn.
+
+These events provide a transparent record of all reserve activity, which is crucial for monitoring the protocol's health and tracking the backing of the GYD stablecoin.
+
+## Example Usage
+Imagine a scenario where a user wants to deposit USDC tokens into the Gyroscope reserve. Here's how they might interact with the `IReserve` interface:
+
+<Steps>
+### Step 1
+The user first needs to ensure that their USDC balance is approved for the `IReserve` contract to spend on their behalf. This can be done by calling the `IERC20.approve` function on the USDC token contract.
+
+### Step 2
+Next, the user calls the `depositToken` function on the `IReserve` contract, passing the USDC token address and the amount they wish to deposit.
+
+```solidity
+IReserve reserve = IReserve(gyroConfig.getReserve());
+reserve.depositToken(usdcToken, 10_000 * 1e6); // Deposit 10,000 USDC
+```
+
+The `gyroConfig.getReserve()` call retrieves the address of the `IReserve` contract from the global configuration, which is a common pattern in the Gyroscope protocol.
+</Steps>
+
+Similarly, a manager could withdraw tokens from the reserve by calling the `withdrawToken` function:
+
+```solidity
+IReserve reserve = IReserve(gyroConfig.getReserve());
+reserve.withdrawToken(usdcToken, 5_000 * 1e6); // Withdraw 5,000 USDC
+```
+
+The `IReserve` interface is a fundamental building block of the Gyroscope protocol, enabling the secure and transparent management of the reserve backing the GYD stablecoin. Its design and implementation are crucial to the overall stability and functionality of the Gyroscope ecosystem.
+
+For more information on how the `IReserve` interface fits into the broader Gyroscope architecture, please refer to the [Motherboard](/imotherboard) and [Vaults](/igyro-vault) sections of this documentation.

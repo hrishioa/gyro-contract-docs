@@ -2,67 +2,65 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # IPAMM
 
-The `IPAMM` interface defines the core pricing mechanism for the Gyroscope protocol. This interface is responsible for the following key functions:
+The `IPAMM` (Primary Automated Market Maker) interface defines the core functionality for the primary AMM pricing mechanism in the Gyroscope protocol. This contract is responsible for managing the redemption level, computing the reserve value, and handling minting and redemption operations.
 
-1. **Quoting Mint Amounts**: The `computeMintAmount` function allows users to get a quote for how many Gyro Dollars (GYD) they will receive when depositing a certain amount of USD.
-2. **Minting GYD**: The `mint` function allows users to actually mint GYD tokens by depositing the required USD amount.
-3. **Quoting Redeem Amounts**: The `computeRedeemAmount` function allows users to get a quote for how much USD they will receive when redeeming a certain amount of GYD.
-4. **Redeeming GYD**: The `redeem` function allows users to redeem GYD tokens in exchange for the corresponding USD amount.
-5. **Updating System Parameters**: The `setSystemParams` function allows the protocol governance to update the various parameters that govern the primary AMM pricing mechanism.
+The `IPAMM` interface is central to the Gyroscope protocol, as it encapsulates the key pricing and liquidity management logic. It provides a standardized way for other contracts in the system, such as the [Motherboard](/imotherboard) and [Reserve](/ireserve), to interact with the primary AMM.
 
-The `IPAMM` interface is a critical piece of the Gyroscope protocol, as it defines the core logic for minting and redeeming the GYD stablecoin. Let's dive into the details of each of these functions:
+## Key Functionality
 
-## `computeMintAmount`
+The `IPAMM` interface exposes the following key functionalities:
 
-This function allows users to get a quote for how many GYD tokens they will receive when depositing a certain amount of USD. The function takes two parameters:
-
-1. `usdAmount`: The amount of USD the user wants to deposit.
-2. `reserveUSDValue`: The current USD value of the Gyroscope reserve.
-
-The function then returns the corresponding amount of GYD tokens that will be minted.
+### Minting
+The `computeMintAmount` and `mint` functions handle the minting of Gyro dollars (GYD) tokens. The `computeMintAmount` function calculates the amount of GYD tokens to mint for a given USD input amount, while the `mint` function records this minting and returns the minted amount.
 
 <Callout type="info">
-The `reserveUSDValue` parameter is included to future-proof the implementation, in case the reserve's state needs to be taken into account when computing the mint amount.
+The minting process involves adding the input USD value to the reserve, and minting the corresponding amount of GYD tokens. The specific pricing logic is implemented in the [PAMM](/pamm) contract, which implements the `IPAMM` interface.
 </Callout>
 
-## `mint`
-
-This function allows users to actually mint GYD tokens by depositing the required USD amount. It takes the same parameters as `computeMintAmount`, and returns the amount of GYD tokens that were minted.
-
-<Callout type="warning">
-Note that this function can only be called by the authorized Motherboard contract, as it needs to record the minting operation.
-</Callout>
-
-## `computeRedeemAmount`
-
-This function allows users to get a quote for how much USD they will receive when redeeming a certain amount of GYD. The function takes two parameters:
-
-1. `gydAmount`: The amount of GYD tokens the user wants to redeem.
-2. `reserveUSDValue`: The current USD value of the Gyroscope reserve.
-
-The function then returns the corresponding amount of USD that the user will receive.
+### Redemption
+The `computeRedeemAmount` and `redeem` functions handle the redemption of GYD tokens for USD. The `computeRedeemAmount` function calculates the USD value to be returned for a given amount of GYD tokens, while the `redeem` function records this redemption and returns the redeemed USD value.
 
 <Callout type="info">
-Similar to the `mint` function, the `reserveUSDValue` parameter is included to future-proof the implementation.
+The redemption process involves burning the GYD tokens and withdrawing the corresponding USD value from the reserve. The specific pricing logic is again implemented in the [PAMM](/pamm) contract.
 </Callout>
 
-## `redeem`
-
-This function allows users to redeem GYD tokens in exchange for the corresponding USD amount. It takes the same parameters as `computeRedeemAmount`, and returns the amount of USD that was sent to the user.
+### System Parameters
+The `setSystemParams` function allows the system parameters, such as the alpha bar, xu bar, theta bar, and outflow memory, to be updated. These parameters are crucial in determining the pricing behavior of the primary AMM.
 
 <Callout type="warning">
-Like the `mint` function, `redeem` can only be called by the authorized Motherboard contract.
+Updating the system parameters should be done with great care, as it can significantly impact the behavior of the protocol. Any changes to these parameters should go through the [Governance](/governance) process.
 </Callout>
 
-## `setSystemParams`
+## Usage
 
-This function allows the protocol governance to update the various parameters that govern the primary AMM pricing mechanism. These parameters include:
+The `IPAMM` interface is primarily used by the [Motherboard](/imotherboard) contract to handle minting and redemption requests from users. The Motherboard contract is the main entry point for users to interact with the Gyroscope protocol.
 
-- `alphaBar`: The maximum allowed value for the `alpha` parameter in the pricing function.
-- `xuBar`: The maximum allowed value for the `xu` parameter in the pricing function.
-- `thetaBar`: The maximum allowed value for the `theta` parameter in the pricing function.
-- `outflowMemory`: A parameter used in the flow calculation, which determines the "memory" of the system.
+Other contracts, such as the [Reserve](/ireserve), may also need to reference the `IPAMM` interface to obtain pricing information or initiate redemption operations.
 
-Adjusting these parameters can have a significant impact on the behavior of the primary AMM, so changes to the system parameters should be carefully considered and approved by the Gyroscope governance.
+Here's an example of how the `IPAMM` interface might be used in the Motherboard contract:
 
-In summary, the `IPAMM` interface is a crucial component of the Gyroscope protocol, as it defines the core logic for minting, redeeming, and pricing the GYD stablecoin. By understanding the details of this interface, developers can build applications and integrations that seamlessly interact with the Gyroscope protocol. For more information on the Gyroscope protocol, be sure to check out the [other sections](/core-contracts/pamm) of this developer handbook.
+```solidity
+function mint(DataTypes.MintAsset[] calldata assets, uint256 minReceivedAmount)
+    external
+    returns (uint256 mintedGYDAmount)
+{
+    // Compute the amount of GYD to mint for the given input assets
+    mintedGYDAmount = pamm().mint(assets[0].inputAmount, assets[0].inputToken);
+
+    // Ensure the minted amount is at least the minimum requested
+    require(mintedGYDAmount >= minReceivedAmount, "Insufficient GYD minted");
+
+    // Mint the GYD tokens to the user
+    gydToken().mint(msg.sender, mintedGYDAmount);
+
+    return mintedGYDAmount;
+}
+```
+
+In this example, the Motherboard contract calls the `mint` function on the `IPAMM` contract to compute the amount of GYD tokens to mint for the given input assets. It then ensures that the minted amount meets the user's minimum requirement, and finally mints the GYD tokens to the user's address.
+
+The redemption process would follow a similar pattern, where the Motherboard contract calls the `redeem` function on the `IPAMM` contract to compute the USD value to be returned for the given GYD token amount.
+
+## Conclusion
+
+The `IPAMM` interface is a crucial component of the Gyroscope protocol, as it encapsulates the core pricing and liquidity management logic. By providing a standardized way for other contracts to interact with the primary AMM, the `IPAMM` interface helps to maintain the overall cohesion and modularity of the Gyroscope system.

@@ -1,0 +1,49 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# FixedPoint
+
+The `FixedPoint` library provides a set of utilities for working with fixed-point arithmetic in the Gyroscope protocol. Fixed-point numbers are a way to represent fractional values in a contract's storage, allowing for more precise calculations compared to using native integer types.
+
+In the context of Gyroscope, fixed-point numbers are used extensively throughout the protocol, especially in the [PAMM (PrimaryAMMV1)](/core-contracts/pamm) contract, where they are used to represent values such as redemption levels, reserve values, and total Gyro supply.
+
+## FixedPoint Operations
+
+The `FixedPoint` library provides the following key operations:
+
+- **`divDown`**: Performs a division operation, rounding down the result to the nearest integer.
+- **`mulDown`**: Performs a multiplication operation, rounding down the result to the nearest integer.
+- **`mulUp`**: Performs a multiplication operation, rounding up the result to the nearest integer.
+- **`absSub`**: Performs an absolute subtraction operation, returning the absolute difference between two values.
+
+These operations are designed to handle potential overflow and underflow issues that can arise when working with fixed-point numbers. By rounding the results, the library ensures that the calculated values remain within the expected range and do not cause unexpected behavior in the protocol.
+
+<Callout type="info">
+The `FixedPoint` library uses a scale of 1e18, meaning that each fixed-point number represents a value with 18 decimal places. This is a common scale used in Ethereum-based DeFi protocols, as it aligns with the decimal places of Ether and many ERC20 tokens.
+</Callout>
+
+## Example Usage
+
+Here's an example of how the `FixedPoint` library might be used in the [PAMM (PrimaryAMMV1)](/core-contracts/pamm) contract:
+
+```solidity
+using FixedPoint for uint256;
+
+uint256 redemptionLevel = 0.5 * 1e18; // 0.5 with 18 decimal places
+uint256 reserveValue = 1000 * 1e18; // 1000 with 18 decimal places
+uint256 totalGyroSupply = 1000 * 1e18; // 1000 with 18 decimal places
+
+uint256 normalizedRedemptionLevel = redemptionLevel.divDown(totalGyroSupply);
+uint256 normalizedReserveValue = reserveValue.divDown(totalGyroSupply);
+
+uint256 price = normalizedReserveValue.divDown(normalizedRedemptionLevel);
+```
+
+In this example, we're working with fixed-point values representing the redemption level, reserve value, and total Gyro supply. We use the `divDown` function to normalize these values by dividing them by the total Gyro supply, and then we calculate the price as the normalized reserve value divided by the normalized redemption level.
+
+The `FixedPoint` library ensures that these calculations are performed correctly, handling any potential overflow or underflow issues that could arise when working with large fixed-point numbers.
+
+## Conclusion
+
+The `FixedPoint` library is a crucial component of the Gyroscope protocol, enabling precise and reliable calculations of fixed-point values throughout the system. By using this library, the protocol can ensure that its core functionality, such as redemption pricing and reserve management, remains accurate and stable, even when dealing with large or fractional values.
+
+As you continue to explore the Gyroscope protocol, you'll likely encounter the `FixedPoint` library in many of the core contracts, so understanding its usage and capabilities will be essential for understanding and interacting with the protocol.

@@ -2,69 +2,50 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # IGyroConfig
 
-The `IGyroConfig` interface is a critical component of the Gyroscope protocol, as it is responsible for storing and managing the global configuration settings. This contract serves as the central authority for defining and controlling various parameters that govern the behavior of the entire system.
+The `IGyroConfig` interface is a crucial component of the Gyroscope protocol, as it stores and manages the global configuration settings for the entire ecosystem. This contract acts as a centralized source of truth for various parameters and addresses that are used across multiple contracts within the protocol.
 
-The `IGyroConfig` interface provides a set of functions that allow for the retrieval, modification, and freezing of configuration values. This includes the ability to set and retrieve both *uint256* and *address* values, as well as the ability to unset and freeze specific configuration keys.
+The `IGyroConfig` interface provides the following key functionalities:
 
-One of the key features of `IGyroConfig` is its event emitting capabilities. Whenever a configuration is changed, either by setting a new value or unsetting an existing one, the contract emits events to notify the rest of the protocol. This allows other components to react to these changes and adapt their behavior accordingly.
+1. **Configuration Management**: It allows the protocol's governance to set, update, and unset various configuration parameters, such as addresses of core contracts, fee rates, and other protocol-wide settings.
+2. **Configuration Freezing**: The interface also enables the freezing of certain configuration parameters, making them immutable and preventing further changes.
+3. **Configuration Querying**: The `IGyroConfig` contract provides functions to retrieve the current values of configuration parameters, as well as check if a specific parameter exists and whether it has been frozen.
+
+## Configuration Parameters
+
+The configuration parameters managed by the `IGyroConfig` interface include, but are not limited to:
+
+- Addresses of core Gyroscope contracts, such as the [Motherboard](/imotherboard), [Reserve](/ireserve), and [PAMM](/pamm) contracts.
+- Protocol fee rates, such as the flash loan fee and swap fee.
+- Volatility thresholds for asset prices.
+- Parameters related to the vault weight management, such as the maximum allowed deviation from the ideal weight.
+- Addresses of authorized entities, such as the [Oracle Guardian](/oracle-integration) and [Safety Check](/isafety-check) contracts.
 
 <Callout type="info">
-The ability to freeze a configuration key is an important security feature, as it prevents the value from being changed or unset, even by the governor. This is crucial for ensuring the stability and predictability of the Gyroscope protocol.
+The specific configuration parameters and their usage are documented in the respective sections of this handbook, such as [PAMM](/pamm) and [Oracle Integration](/oracle-integration).
 </Callout>
 
-The `IGyroConfig` interface also provides a function to list all the registered configuration keys, which can be useful for auditing and debugging purposes.
+## Configuration Interaction
 
-## Retrieving Configuration Values
+Interactions with the `IGyroConfig` interface are typically performed by the protocol's governance, which has the authority to update the configuration settings. However, other contracts within the Gyroscope ecosystem may also need to access these configuration parameters to perform their respective functions.
 
-Gyroscope developers can use the `getUint()` and `getAddress()` functions to retrieve the values of specific configuration keys. These functions take the key as an argument and return the corresponding value. If the key does not exist, the `getUint()` function can return a default value, while the `getAddress()` function will return the zero address.
+For example, the [Motherboard](/imotherboard) contract may need to retrieve the address of the [Reserve](/ireserve) contract to facilitate the minting and redemption of Gyro Dollars (GYD). Similarly, the [PAMM](/pamm) contract may need to access the volatility thresholds and other parameters related to the primary AMM pricing mechanism.
 
-```solidity
-bytes32 key = keccak256("ALPHA_BAR");
-uint256 alphaBar = gyroConfig.getUint(key);
+The following diagram illustrates the interactions between the `IGyroConfig` interface and other Gyroscope contracts:
+
+```mermaid
+graph TD
+  IGyroConfig --> Motherboard
+  IGyroConfig --> PAMM
+  IGyroConfig --> OracleGuardian
+  IGyroConfig --> SafetyCheck
+  Motherboard <-- IGyroConfig
+  PAMM <-- IGyroConfig
+  OracleGuardian <-- IGyroConfig
+  SafetyCheck <-- IGyroConfig
 ```
 
-## Setting Configuration Values
+By providing a centralized and well-defined interface for managing protocol-wide configurations, the `IGyroConfig` contract plays a crucial role in ensuring the consistent and coordinated behavior of the Gyroscope ecosystem.
 
-Updating the configuration is a privileged operation, and can only be performed by the current governor of the Gyroscope protocol. Developers can use the `setUint()` and `setAddress()` functions to update the values of specific configuration keys.
+## Conclusion
 
-<Steps>
-### Step 1
-Obtain the necessary permissions to update the configuration. This typically involves being the current governor or being authorized by the governor.
-
-### Step 2
-Determine the configuration key you wish to update and the new value you want to set.
-
-### Step 3
-Call the appropriate `setUint()` or `setAddress()` function on the `IGyroConfig` contract, passing in the key and the new value.
-</Steps>
-
-```solidity
-bytes32 key = keccak256("ALPHA_BAR");
-uint256 newAlphaBar = 0.5e18;
-gyroConfig.setUint(key, newAlphaBar);
-```
-
-## Unsetting and Freezing Configuration Keys
-
-In addition to setting new values, the `IGyroConfig` interface also provides the ability to unset and freeze configuration keys. Unsetting a key removes it from the configuration, while freezing a key makes it impossible to update or unset in the future.
-
-<Steps>
-### Step 1
-Obtain the necessary permissions to unset or freeze a configuration key. This typically involves being the current governor or being authorized by the governor.
-
-### Step 2
-Determine the configuration key you wish to unset or freeze.
-
-### Step 3
-Call the `unset()` function to remove the key from the configuration, or the `freeze()` function to make the key immutable.
-</Steps>
-
-```solidity
-bytes32 key = keccak256("ALPHA_BAR");
-gyroConfig.unset(key);
-gyroConfig.freeze(key);
-```
-
-By providing this level of control and configurability, the `IGyroConfig` interface allows the Gyroscope protocol to be highly adaptable and responsive to changing market conditions and governance decisions. Developers building on top of Gyroscope can rely on this interface to interact with the protocol's global settings and ensure their applications are in sync with the overall system.
-
-For more information on the Gyroscope protocol, be sure to check out the [overview](/introduction) and [other core contracts](/core-contracts) sections of this handbook.
+The `IGyroConfig` interface is a essential component of the Gyroscope protocol, as it allows the protocol's governance to manage the global configuration settings. This contract serves as a source of truth for various parameters and addresses used across multiple contracts within the ecosystem, enabling coordinated and consistent behavior throughout the protocol.

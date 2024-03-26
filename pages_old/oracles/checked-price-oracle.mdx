@@ -1,0 +1,46 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# CheckedPriceOracle
+
+The `CheckedPriceOracle` is a crucial component of the Gyroscope protocol, responsible for providing reliable and secure asset prices. This contract performs various checks on the asset prices to ensure that the prices used for minting and redeeming the Gyro dollar (GYD) token are accurate and free from manipulation.
+
+The `CheckedPriceOracle` contract inherits from the `Governable` contract, which means that certain actions, such as updating the oracle sources, can only be performed by the protocol's governance. This design ensures that the oracle can be maintained and improved over time while preserving the security of the system.
+
+## Oracle Initialization and Updates
+
+The `CheckedPriceOracle` is initialized with the following parameters:
+
+- `_governor`: The address of the protocol's governance contract, which has the authority to update the oracle sources.
+- `_usdOracle`: The address of the USD price oracle, which is typically a Chainlink oracle.
+- `_relativeOracle`: The address of the relative price oracle, which provides the relative prices between asset pairs.
+- `_wethAddress`: The address of the Wrapped Ether (WETH) token, which is used as the reference asset for price checks.
+
+These parameters can be updated through the `setUSDOracle` and `setRelativeOracle` functions, which can only be called by the governance contract.
+
+## Trusted Price Sources
+
+The `CheckedPriceOracle` also maintains a list of trusted price sources, which are additional oracles that can provide signed prices for the WETH/USD price. This list is managed through the `addSignedPriceSource` and `removeSignedPriceSource` functions, which are also restricted to the governance contract.
+
+The purpose of these trusted price sources is to provide a more robust and decentralized price feed, reducing the reliance on a single oracle and improving the overall price reliability.
+
+## Price Checks
+
+The core functionality of the `CheckedPriceOracle` is to perform various checks on the asset prices to ensure their accuracy and consistency. These checks include:
+
+1. **Relative Price Consistency**: The oracle checks that the relative prices between assets are consistent with the prices reported by the relative price oracle. This helps prevent arbitrage opportunities and ensures that the prices used for minting and redeeming GYD are accurate.
+
+2. **WETH Price Grounding**: The oracle checks that the WETH/USD price reported by the trusted price sources is within a reasonable range of the price computed from the asset prices and the relative price oracle. This helps ensure that the root price used for the protocol is well-grounded and not subject to manipulation.
+
+3. **Price Level Checks**: The oracle performs additional checks on the price level, which involves computing a time-weighted average price (TWAP) for a set of assets paired with WETH. This TWAP is then used to cross-validate the prices reported by the trusted sources, further improving the overall price reliability.
+
+These checks are performed in the `getPricesUSDWithMetadata` function, which returns the USD prices for the requested assets, along with the metadata necessary for the protocol to verify the price integrity.
+
+<Callout type="info">
+The specific price checks and thresholds used in the `CheckedPriceOracle` are based on the Gyroscope protocol's design and are subject to change through governance decisions. It's important to refer to the latest protocol documentation for the most up-to-date information.
+</Callout>
+
+## Integration with Other Contracts
+
+The `CheckedPriceOracle` is integrated with other core contracts in the Gyroscope protocol, such as the [IPAMM](/core-contracts/ipamm) and [IMotherboard](/core-contracts/imotherboard) interfaces. These contracts rely on the price information provided by the `CheckedPriceOracle` to perform various operations, such as minting and redeeming GYD tokens.
+
+By using the `CheckedPriceOracle`, the Gyroscope protocol ensures that the prices used for these critical operations are secure, reliable, and resistant to manipulation, helping to maintain the stability and integrity of the overall system.

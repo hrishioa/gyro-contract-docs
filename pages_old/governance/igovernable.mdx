@@ -1,0 +1,34 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# IGovernable
+
+The `IGovernable` interface is a core part of the Gyroscope protocol, providing a standardized way for contracts to be governed and managed. This interface defines the essential functions and events for contract governance, ensuring a consistent and secure way for the protocol to be updated and modified over time.
+
+At the heart of the `IGovernable` interface is the concept of a **governor**. The governor is the entity responsible for making changes to the protocol, such as updating system parameters, registering new vaults, or changing critical configuration settings. The `IGovernable` interface ensures that only the current governor can perform these privileged actions.
+
+The key features of the `IGovernable` interface include:
+
+- **Changing the Governor**: The `changeGovernor` function allows the current governor to transfer governance to a new address. This is an important function, as it allows for a smooth transition of power and ensures that the protocol can continue to evolve under the guidance of trusted individuals or organizations.
+
+<Callout type="info">
+The ability to change the governor is critical for the long-term sustainability of the Gyroscope protocol. It allows the project to adapt to changing circumstances and ensure that governance remains in the hands of responsible and capable individuals.
+</Callout>
+
+- **Accepting Governance**: The `acceptGovernance` function allows a pending governor to officially take over governance of the contract. This two-step process (proposing a new governor, then accepting the governance) helps to ensure that governance changes are transparent and deliberate.
+
+- **Governance Events**: The `IGovernable` interface defines two events that are emitted whenever the governor is changed: `GovernorChanged` and `GovernorChangeRequested`. These events help to provide a clear audit trail of governance changes and allow external parties to monitor the protocol's governance.
+
+Here's an example of how the `IGovernable` interface might be used in the Gyroscope protocol:
+
+<Steps>
+### Step 1
+The current governor, Alice, decides that it's time to transfer governance of the `PrimaryAMMV1` contract to a new address, Bob. Alice calls the `changeGovernor` function, passing Bob's address as the new governor.
+
+### Step 2
+The Gyroscope community is notified of the pending governance change through the `GovernorChangeRequested` event. This gives everyone a chance to review the proposed change and provide feedback.
+
+### Step 3
+After a suitable review period, Bob calls the `acceptGovernance` function to officially become the new governor of the `PrimaryAMMV1` contract. The `GovernorChanged` event is emitted, solidifying the governance transition.
+</Steps>
+
+The `IGovernable` interface is a crucial part of the Gyroscope protocol, ensuring that the project can be managed and updated in a secure and transparent way. By providing a standardized approach to governance, the Gyroscope team can focus on building innovative DeFi features while maintaining the trust and confidence of the community.

@@ -1,0 +1,95 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# IPAMM
+
+The `IPAMM` interface defines the core functionality of the Primary Automated Market Maker (PAMM) contract in the Gyroscope protocol. The PAMM is responsible for handling the pricing and redemption mechanics of the Gyroscope stablecoin (GYD).
+
+The `IPAMM` interface provides the following key functionalities:
+
+**Minting GYD tokens**
+The `computeMintAmount` and `mint` functions allow users to mint new GYD tokens by depositing assets into the reserve. The amount of GYD minted is determined by the PAMM's pricing algorithm.
+
+**Redeeming GYD tokens**
+The `computeRedeemAmount` and `redeem` functions allow users to redeem their GYD tokens in exchange for the underlying assets. The amount received is calculated based on the PAMM's pricing model.
+
+**Updating system parameters**
+The `setSystemParams` function allows the protocol governance to update the key system parameters that control the PAMM's behavior, such as the `alphaBar`, `xuBar`, `thetaBar`, and `outflowMemory`.
+
+Let's dive into the details of these key functions:
+
+## Minting GYD Tokens
+
+<Callout type="info">
+The `computeMintAmount` function quotes the amount of GYD tokens that will be minted for a given USD input amount, while the `mint` function records the minting and returns the actual minted amount.
+</Callout>
+
+```solidity
+function computeMintAmount(uint256 usdAmount, uint256 reserveUSDValue)
+    external
+    view
+    returns (uint256);
+
+function mint(uint256 usdAmount, uint256 reserveUSDValue)
+    external
+    returns (uint256 mintedGYDAmount);
+```
+
+These functions are used by the [IMotherboard](/core-contracts/imotherboard) contract to handle the minting of new GYD tokens when a user deposits assets into the Gyroscope reserve.
+
+The `computeMintAmount` function takes the desired USD input amount and the current USD value of the reserve, and returns the corresponding amount of GYD tokens that will be minted. This allows users to estimate the GYD they will receive before committing to the mint operation.
+
+The `mint` function records the minting of GYD tokens and returns the actual amount minted. This function can only be called by the authorized [IMotherboard](/core-contracts/imotherboard) contract.
+
+## Redeeming GYD Tokens
+
+<Callout type="info">
+The `computeRedeemAmount` function quotes the USD value that will be received for a given amount of GYD tokens, while the `redeem` function records the redemption and returns the actual USD value paid out.
+</Callout>
+
+```solidity
+function computeRedeemAmount(uint256 gydAmount, uint256 reserveUSDValue)
+    external
+    view
+    returns (uint256);
+
+function redeem(uint256 gydAmount, uint256 reserveUSDValue)
+    external
+    returns (uint256 outputUSDAmount);
+```
+
+These functions are used by the [IMotherboard](/core-contracts/imotherboard) contract to handle the redemption of GYD tokens in exchange for the underlying assets.
+
+The `computeRedeemAmount` function takes the desired amount of GYD tokens to redeem and the current USD value of the reserve, and returns the corresponding USD value that the user will receive. This allows users to estimate the redemption proceeds before committing to the redeem operation.
+
+The `redeem` function records the redemption of GYD tokens and returns the actual USD value paid out to the user. This function can only be called by the authorized [IMotherboard](/core-contracts/imotherboard) contract.
+
+## Updating System Parameters
+
+```solidity
+function setSystemParams(Params memory params) external;
+```
+
+The `setSystemParams` function allows the protocol governance to update the key system parameters that control the PAMM's behavior. These parameters include:
+
+- `alphaBar`: The maximum value for the `alpha` parameter used in the PAMM's pricing model.
+- `xuBar`: The maximum value for the `xu` parameter used in the PAMM's pricing model.
+- `thetaBar`: The maximum value for the `theta` parameter used in the PAMM's pricing model.
+- `outflowMemory`: The memory parameter used in the PAMM's redemption flow calculation.
+
+Updating these parameters allows the protocol governance to fine-tune the PAMM's behavior to maintain the stability and performance of the Gyroscope stablecoin.
+
+## Examples
+
+Here's an example of how the `computeRedeemAmount` function might be used:
+
+```solidity
+uint256 gydToRedeem = 1000;
+uint256 reserveUSDValue = 1000000;
+
+uint256 redemptionUSD = ipamm.computeRedeemAmount(gydToRedeem, reserveUSDValue);
+// redemptionUSD might be 990 if there is a 1% discount on redeeming GYD
+```
+
+In this example, the user is redeeming 1000 GYD tokens, and the current USD value of the reserve is $1,000,000. The `computeRedeemAmount` function calculates that the user will receive $990 in exchange for their 1000 GYD tokens, reflecting a 1% discount on the redemption.
+
+The Gyroscope protocol uses the IPAMM interface to integrate the PAMM's functionality into the broader protocol architecture, ensuring a stable and efficient stablecoin experience for users.

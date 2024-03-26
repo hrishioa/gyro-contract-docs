@@ -1,0 +1,88 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# ConfigHelpers
+
+The `ConfigHelpers` library provides a set of helper functions for interacting with the [IGyroConfig](/igyro-config) interface. This interface is responsible for storing and managing the global configuration settings of the Gyroscope protocol.
+
+The `ConfigHelpers` library simplifies the process of accessing and updating these configuration settings, making it easier for developers to work with the Gyroscope protocol.
+
+## Key Features
+
+The `ConfigHelpers` library includes the following key features:
+
+- Provides a convenient way to fetch configuration values, with default values if the key is not found
+- Allows for easy setting of configuration values, whether they are `uint256` or `address` types
+- Supports unsetting and freezing of configuration keys, to maintain the integrity of the protocol
+
+## Examples
+
+Let's look at some examples of how to use the `ConfigHelpers` library.
+
+<Callout type="info">
+The examples assume you have an instance of the `IGyroConfig` contract available in your code.
+</Callout>
+
+### Fetching Configuration Values
+
+To fetch a `uint256` configuration value, you can use the `getUint` function:
+
+```solidity
+uint256 xuBar = ConfigHelpers.getUint(_gyroConfig, "xuBar");
+```
+
+If the `"xuBar"` key is not found in the configuration, the function will return `0` by default. You can also provide a custom default value:
+
+```solidity
+uint256 defaultXuBar = 0.5 * 1e18; // 0.5
+uint256 xuBar = ConfigHelpers.getUint(_gyroConfig, "xuBar", defaultXuBar);
+```
+
+Similarly, you can fetch `address` configuration values using the `getAddress` function:
+
+```solidity
+address oracle = ConfigHelpers.getAddress(_gyroConfig, "usdOracle");
+```
+
+### Setting Configuration Values
+
+To update a `uint256` configuration value, use the `setUint` function:
+
+```solidity
+ConfigHelpers.setUint(_gyroConfig, "xuBar", 0.6 * 1e18); // Set xuBar to 0.6
+```
+
+And to update an `address` configuration value, use the `setAddress` function:
+
+```solidity
+ConfigHelpers.setAddress(_gyroConfig, "usdOracle", 0x1234567890123456789012345678901234567890);
+```
+
+### Unsetting and Freezing Configuration Keys
+
+If you need to remove a configuration key, you can use the `unset` function:
+
+```solidity
+ConfigHelpers.unset(_gyroConfig, "xuBar");
+```
+
+To make a configuration key immutable, you can freeze it using the `freeze` function:
+
+```solidity
+ConfigHelpers.freeze(_gyroConfig, "usdOracle");
+```
+
+Once a key is frozen, it can no longer be updated or unset.
+
+## Integration with the Gyroscope Protocol
+
+The `ConfigHelpers` library is widely used throughout the Gyroscope protocol, including in the following key contracts:
+
+- [PAMM (PrimaryAMMV1)](/pamm)
+- [IMotherboard](/imotherboard)
+- [IReserveManager](/ireserve-manager)
+
+By using the `ConfigHelpers` library, these contracts can easily access and update the global configuration settings, ensuring consistency and maintainability across the protocol.
+
+## Conclusion
+
+The `ConfigHelpers` library provides a simple and efficient way to interact with the Gyroscope protocol's global configuration settings. By abstracting away the low-level details of the [IGyroConfig](/igyro-config) interface, the `ConfigHelpers` library makes it easier for developers to work with the Gyroscope protocol and ensure the integrity of the system.

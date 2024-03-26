@@ -1,0 +1,48 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Flow
+
+The `Flow` library in the Gyroscope protocol provides a utility for calculating an exponential moving sum based on a memory parameter. This is particularly useful for tracking the flow of assets in and out of the protocol's vaults, which is a key metric used in various safety checks and weight calculations.
+
+The main function in the `Flow` library is `updateFlow`, which takes the following parameters:
+
+- `flowHistory`: The current value of the exponential moving sum.
+- `currentBlock`: The current block number.
+- `lastSeenBlock`: The block number of the last time the flow was updated.
+- `memoryParam`: The memory parameter, which determines the rate of decay of the exponential moving sum.
+
+The `updateFlow` function calculates the new value of the exponential moving sum based on the time difference between the current block and the last seen block, as well as the memory parameter. This allows the protocol to efficiently track the flow of assets over time without the need to store the entire history.
+
+<Callout type="info">
+The exponential moving sum is a useful technique for tracking time-series data with a decay factor, such as the flow of assets in and out of a vault. It provides a compact representation of the recent history, which can be important for making decisions in a decentralized protocol.
+</Callout>
+
+Here's an example of how the `updateFlow` function is used in the Gyroscope protocol:
+
+```solidity
+function updateFlow(
+    uint256 flowHistory,
+    uint256 currentBlock,
+    uint256 lastSeenBlock,
+    uint256 memoryParam
+) internal pure returns (uint256) {
+    if (lastSeenBlock == currentBlock || flowHistory == 0) {
+        return flowHistory;
+    } else if (lastSeenBlock < currentBlock) {
+        uint256 blockDifference = currentBlock - lastSeenBlock;
+        uint256 memoryParamRaised = memoryParam.intPowDown(blockDifference);
+        return flowHistory.mulDown(memoryParamRaised);
+    }
+    revert(Errors.INVALID_ARGUMENT);
+}
+```
+
+The `updateFlow` function first checks if the current block is the same as the last seen block or if the flow history is zero. In these cases, it simply returns the current flow history.
+
+If the current block is after the last seen block, it calculates the difference in block numbers and raises the memory parameter to that power. This represents the decay factor of the exponential moving sum. The function then multiplies the current flow history by this decay factor to get the new flow history.
+
+If the current block is before the last seen block, it reverts with an `INVALID_ARGUMENT` error, as this would indicate an inconsistent state.
+
+The `Flow` library is a crucial component of the Gyroscope protocol, as it allows the system to efficiently track the flow of assets in and out of the vaults, which is a key input to various safety checks and weight calculations performed by the protocol. By using an exponential moving sum, the protocol can maintain an accurate representation of the recent flow history without needing to store the entire history, which would be prohibitively expensive on the blockchain.
+
+For more information on the use of the `Flow` library within the Gyroscope protocol, please refer to the [PrimaryAMMV1](/core-contracts/pamm) and [ISafetyCheck](/core-contracts/isafety-check) sections.

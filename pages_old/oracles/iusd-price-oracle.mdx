@@ -1,0 +1,30 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# IUSDPriceOracle
+
+The `IUSDPriceOracle` is the interface that provides the ability to fetch the USD price of a given asset. This is a crucial component in the Gyroscope protocol, as many of the core functionality, such as minting and redeeming, rely on accurate USD pricing information.
+
+<Callout type="info">
+The USD price is always scaled with 18 decimals, regardless of the source used for the oracle. This ensures consistent pricing across the protocol.
+</Callout>
+
+The interface has a single function, `getPriceUSD`, which takes the address of an asset and returns its USD price:
+
+```solidity
+/// @notice Quotes the USD price of `tokenAddress`
+/// The quoted price is always scaled with 18 decimals regardless of the
+/// source used for the oracle.
+/// @param tokenAddress the asset of which the price is to be quoted
+/// @return the USD price of the asset
+function getPriceUSD(address tokenAddress) external view returns (uint256);
+```
+
+This function is used extensively throughout the Gyroscope protocol, for example in the [PAMM](/core-contracts/pamm) contract to calculate the appropriate amounts for minting and redeeming Gyro Dollars (GYD).
+
+The implementation of the `IUSDPriceOracle` interface is provided by the [CheckedPriceOracle](/oracles/checked-price-oracle) contract, which performs additional checks and validations on the USD prices to ensure they are up-to-date and consistent.
+
+<Callout type="warning">
+It's crucial that the USD price oracle provides accurate and reliable pricing information, as any issues could lead to significant problems in the Gyroscope protocol. The `CheckedPriceOracle` contract is designed to mitigate these risks through various safety checks.
+</Callout>
+
+Overall, the `IUSDPriceOracle` interface is a core component of the Gyroscope protocol, providing the foundation for accurate pricing and, in turn, the proper functioning of the entire system.

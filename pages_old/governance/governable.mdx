@@ -1,0 +1,49 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Governable
+
+The `Governable` contract is a core part of the Gyroscope protocol's governance system. It provides a standard way for managing the governor, or the entity responsible for making important decisions about the protocol.
+
+The `Governable` contract inherits from the `GovernableBase` contract, which contains the core logic for governor management. This includes functions for **changing the governor**, **accepting governance**, and **checking the current and pending governor**.
+
+## Governor Management
+
+The governor of the Gyroscope protocol is the entity responsible for making critical decisions, such as:
+
+- Updating system parameters
+- Adding or removing trusted oracles
+- Configuring the protocol's global settings
+
+The `Governable` contract ensures that only the current governor can perform these sensitive actions. This is achieved through the use of the `governanceOnly` modifier, which checks that the caller is the current governor before allowing the function to proceed.
+
+<Callout type="info">
+The governor is initially set during the deployment of the `Governable` contract, and can be changed by the current governor using the `changeGovernor` function.
+</Callout>
+
+## Accepting Governance
+
+When the governor is changed, the new governor must **accept the change** before they can start exercising their responsibilities. This is done through the `acceptGovernance` function, which can only be called by the pending governor.
+
+This two-step process - changing the governor and then accepting the change - helps to ensure that the transition of governance is deliberate and secure.
+
+## Example Usage
+
+Here's an example of how the `Governable` contract might be used in the Gyroscope protocol:
+
+```solidity
+// In the PrimaryAMMV1 contract
+contract PrimaryAMMV1 is Governable {
+    // ...
+
+    function setSystemParams(Params memory params) external governanceOnly {
+        // Only the current governor can update the system parameters
+        systemParams = params;
+    }
+
+    // ...
+}
+```
+
+In this example, the `PrimaryAMMV1` contract inherits from `Governable` and uses the `governanceOnly` modifier to ensure that only the current governor can update the system parameters.
+
+By using the `Governable` contract, the Gyroscope protocol can maintain a secure and transparent governance system, where important decisions are made by a trusted entity and the transition of governance is carefully managed.

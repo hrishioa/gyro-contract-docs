@@ -1,0 +1,88 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# IMotherboard
+
+The **IMotherboard** contract is the central piece that connects the different components of the Gyroscope protocol. It acts as the main entry point for users to interact with the protocol, providing functions to mint and redeem the Gyroscope (GYD) token.
+
+<Callout type="info">
+The IMotherboard interface is designed to be the primary interface for users to interact with the Gyroscope protocol. It abstracts away the complexity of the underlying components, making it easier for developers to integrate with the protocol.
+</Callout>
+
+## Key Responsibilities
+
+The IMotherboard contract has the following key responsibilities:
+
+- Providing the main minting and redemption functions for the GYD token
+- Interfacing with the [PAMM](/core-contracts/pamm) (Primary AMM) contract to handle the pricing of GYD mints and redeems
+- Interacting with the [IReserve](/core-contracts/ireserve) contract to deposit and withdraw tokens
+- Leveraging the [ISafetyCheck](/core-contracts/isafety-check) contract to ensure the safety of mint and redeem operations
+- Exposing the addresses of other key Gyroscope contracts, such as the [GYDToken](/core-contracts/igyd-token), [PAMM](/core-contracts/pamm), and [IGyroConfig](/core-contracts/igyro-config)
+
+## Minting and Redeeming GYD
+
+The main functions provided by the IMotherboard contract for minting and redeeming GYD are:
+
+<Steps>
+### Step 1: Minting GYD
+
+The `mint()` function allows users to mint GYD tokens by depositing a set of input tokens into the protocol. The function takes an array of [DataTypes.MintAsset](/core-contracts/datatypes#mintasset) structs, which specify the input tokens, their amounts, and the destination vaults. The function then calculates the amount of GYD to mint and returns it to the user.
+
+### Step 2: Redeeming GYD
+
+The `redeem()` function allows users to redeem GYD tokens in exchange for a set of output tokens. The function takes an array of [DataTypes.RedeemAsset](/core-contracts/datatypes#redeemasset) structs, which specify the output tokens, the minimum amounts to receive, and the origin vaults. The function then calculates the amount of GYD to redeem and the corresponding output amounts, and transfers the tokens to the user.
+</Steps>
+
+## Safety Checks
+
+The IMotherboard contract relies on the [ISafetyCheck](/core-contracts/isafety-check) contract to ensure the safety of mint and redeem operations. This includes:
+
+- Checking that the proposed changes to the vault weights and balances are within acceptable limits
+- Ensuring that all vaults contain tokens with safe prices (e.g., stablecoins are on-peg)
+- Verifying that the mint or redeem operation would not unbalance the overall protocol
+
+The safety checks are performed both in a "dry run" mode (using the `dryMint()` and `dryRedeem()` functions) and when the actual operation is executed (using the `checkAndPersistMint()` and `checkAndPersistRedeem()` functions).
+
+## Gyroscope Components
+
+The IMotherboard contract provides access to the addresses of other key Gyroscope contracts, including:
+
+- [GYDToken](/core-contracts/igyd-token): The Gyroscope token contract
+- [PAMM](/core-contracts/pamm): The primary AMM pricing mechanism
+- [IReserve](/core-contracts/ireserve): The reserve contract that manages token deposits and withdrawals
+- [IGyroConfig](/core-contracts/igyro-config): The global configuration contract
+
+This allows developers to easily interact with the different components of the Gyroscope protocol without needing to manage the addresses of these contracts directly.
+
+## Example Integration
+
+Here's an example of how a developer might integrate with the IMotherboard contract to mint GYD tokens:
+
+```typescript
+import { IMotherboard, DataTypes } from '@gyroscope/contracts';
+
+const motherboard = await IMotherboard.deploy();
+
+// Prepare the mint assets
+const mintAssets: DataTypes.MintAsset[] = [
+  {
+    inputToken: '0x...',
+    inputAmount: 1000,
+    destinationVault: '0x...',
+  },
+  {
+    inputToken: '0x...',
+    inputAmount: 500,
+    destinationVault: '0x...',
+  },
+];
+
+// Mint the GYD tokens
+const minReceivedAmount = 100;
+const mintedGYD = await motherboard.mint(mintAssets, minReceivedAmount);
+
+console.log(`Minted ${mintedGYD} GYD tokens`);
+```
+
+In this example, the developer first gets an instance of the IMotherboard contract. They then prepare an array of `DataTypes.MintAsset` structs, which specify the input tokens, amounts, and destination vaults. Finally, they call the `mint()` function, providing the minimum amount of GYD they expect to receive in return.
+
+The IMotherboard contract handles the underlying complexity, interacting with the PAMM, IReserve, and ISafetyCheck contracts to perform the mint operation safely and efficiently.

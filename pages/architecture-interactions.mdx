@@ -1,0 +1,63 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Architecture and Interactions
+
+The Gyroscope protocol is built on a modular architecture, with each core component interacting with the others through well-defined interfaces. This allows for flexibility, extensibility, and easier upgradability of the system. Let's dive into the key components and how they work together.
+
+At the heart of the Gyroscope protocol is the [Motherboard](/architecture-interactions/imotherboard) contract, which acts as the central hub, connecting the various parts of the system. The Motherboard is responsible for handling the minting and redemption of the Gyroscope dollar (GYD) token, coordinating with the [PAMM (Primary AMM)](/core-contracts/pamm), the [Reserve](/core-contracts/ireserve), and the [Vaults](/core-contracts/igyro-vault).
+
+The [PAMM](/core-contracts/pamm) is the primary automated market maker (AMM) that determines the pricing and exchange rate between the GYD token and the underlying assets. It uses a specialized pricing algorithm to maintain the stability of the GYD token, ensuring that its value stays close to the target of $1 USD.
+
+The [Reserve](/core-contracts/ireserve) is the contract that holds the underlying assets deposited by users during the minting process. It keeps track of the total value of the reserve and the individual vault balances, and allows authorized managers to deposit and withdraw tokens.
+
+The [Vaults](/core-contracts/igyro-vault) are the building blocks of the reserve, each representing a specific underlying pool or asset. These vaults can be of different types, such as Balancer pools, Curve pools, or Uniswap pools, and they are responsible for managing the deposits and withdrawals of their respective assets.
+
+The [Oracles](/oracles) play a crucial role in the Gyroscope protocol, providing the necessary price information for the PAMM to function correctly. The [CheckedPriceOracle](/oracles/checked-price-oracle) is responsible for fetching and validating the prices of the underlying assets, ensuring that the PAMM has accurate and up-to-date information to work with.
+
+<Callout type="info">
+The [IGyroConfig](/core-contracts/igyro-config) contract is the central place where the global configuration settings for the Gyroscope protocol are stored and managed. This includes parameters like the PAMM's pricing algorithm, the allowed deviation from the $1 USD target, and other crucial system settings.
+</Callout>
+
+To better understand the interactions between these components, let's walk through the high-level flow of the minting and redemption processes:
+
+## Minting Flow
+
+<Steps>
+### Step 1
+
+A user initiates the minting process by calling the `mint` function on the [Motherboard](/architecture-interactions/imotherboard) contract, providing the necessary input tokens and amounts.
+
+### Step 2
+
+The Motherboard contract verifies the safety of the minting operation by calling the [ISafetyCheck](/core-contracts/isafety-check) contract, which ensures that the minting won't cause any issues with the reserve's stability or the peg of the GYD token.
+
+### Step 3
+
+If the minting is deemed safe, the Motherboard contract coordinates with the [PAMM](/core-contracts/pamm) to determine the amount of GYD tokens to mint based on the input tokens and amounts. The PAMM calculates the appropriate exchange rate using its pricing algorithm.
+
+### Step 4
+
+The Motherboard then deposits the input tokens into the [Reserve](/core-contracts/ireserve), updating the corresponding vault balances. In return, the user receives the minted GYD tokens.
+</Steps>
+
+## Redemption Flow
+
+<Steps>
+### Step 1
+
+A user initiates the redemption process by calling the `redeem` function on the [Motherboard](/architecture-interactions/imotherboard) contract, specifying the amount of GYD tokens to redeem and the desired output tokens.
+
+### Step 2
+
+The Motherboard contract verifies the safety of the redemption operation by calling the [ISafetyCheck](/core-contracts/isafety-check) contract, ensuring that the redemption won't cause any issues with the reserve's stability or the peg of the GYD token.
+
+### Step 3
+
+If the redemption is deemed safe, the Motherboard contract coordinates with the [PAMM](/core-contracts/pamm) to determine the amount of output tokens the user should receive based on the GYD tokens being redeemed. The PAMM calculates the appropriate exchange rate using its pricing algorithm.
+
+### Step 4
+
+The Motherboard then withdraws the output tokens from the [Reserve](/core-contracts/ireserve), updating the corresponding vault balances. The user receives the output tokens in exchange for the redeemed GYD tokens.
+</Steps>
+
+The [High-Level Architecture](/architecture-interactions/high-level-architecture), [Minting Flow](/architecture-interactions/minting-flow), [Redemption Flow](/architecture-interactions/redemption-flow), and [Oracle Integration](/architecture-interactions/oracle-integration) sections provide more detailed explanations of these key processes.

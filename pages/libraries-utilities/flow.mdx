@@ -2,31 +2,45 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Flow
 
-The `Flow` library in the Gyroscope protocol is a utility for calculating an *exponential moving sum* based on a specified memory parameter. This is particularly useful for tracking the flow of tokens in and out of the Gyroscope vaults over time.
+The `Flow` library in the Gyroscope protocol is responsible for calculating exponential moving sums, which are used to track the flow of assets in and out of the vaults. This is crucial for the protocol's safety mechanisms, as it allows the system to monitor and react to sudden changes in vault activity.
 
-The key function in the `Flow` library is `updateFlow()`, which takes the following parameters:
+The key function in the `Flow` library is `updateFlow`, which takes the following parameters:
 
-- `flowHistory`: The current value of the exponential moving sum.
-- `currentBlock`: The current block number.
-- `lastSeenBlock`: The block number when the flow was last updated.
-- `memoryParam`: The memory parameter to use for the exponential moving sum calculation.
+- `flowHistory`: the current value of the exponential moving sum
+- `currentBlock`: the current block number
+- `lastSeenBlock`: the block number when the flow was last updated
+- `memoryParam`: a configurable parameter that determines the "memory" of the exponential moving sum
 
-The `updateFlow()` function calculates the new value of the exponential moving sum based on the time elapsed since the last update. If the last update was in the current block, the function simply returns the current `flowHistory` value. If the last update was in a previous block, the function applies an exponential decay to the `flowHistory` value based on the number of blocks elapsed and the `memoryParam`.
+The `updateFlow` function calculates the new value of the exponential moving sum based on the difference between the current block and the last seen block, and the `memoryParam`. This allows the system to track the flow of assets over time, with more recent activity being weighted more heavily.
 
-The exponential decay is calculated using the formula `flowHistory * memoryParam^(currentBlock - lastSeenBlock)`. This ensures that older flow values have less impact on the current value of the exponential moving sum.
+<Callout type="info">
+The exponential moving sum is a useful way to track trends in time-series data, as it gives more weight to recent values while still accounting for historical information. This is particularly relevant in the context of a decentralized protocol, where sudden changes in activity can be a signal of potential issues that need to be addressed.
+</Callout>
 
-Here's an example of how you might use the `updateFlow()` function:
+Here's an example of how the `updateFlow` function is implemented:
 
 ```solidity
-uint256 flowHistory = 100;
-uint256 currentBlock = block.number;
-uint256 lastSeenBlock = 100;
-uint256 memoryParam = 0.95e18; // 95% memory
-
-uint256 newFlowHistory = Flow.updateFlow(flowHistory, currentBlock, lastSeenBlock, memoryParam);
-// newFlowHistory is now the updated exponential moving sum
+function updateFlow(
+    uint256 flowHistory,
+    uint256 currentBlock,
+    uint256 lastSeenBlock,
+    uint256 memoryParam
+) internal pure returns (uint256) {
+    if (lastSeenBlock == currentBlock || flowHistory == 0) {
+        return flowHistory;
+    } else if (lastSeenBlock < currentBlock) {
+        uint256 blockDifference = currentBlock - lastSeenBlock;
+        uint256 memoryParamRaised = memoryParam.intPowDown(blockDifference);
+        return flowHistory.mulDown(memoryParamRaised);
+    }
+    revert(Errors.INVALID_ARGUMENT);
+}
 ```
 
-In this example, the initial `flowHistory` value is 100, and the `memoryParam` is set to 95% (expressed as 0.95e18). If 10 blocks have elapsed since the last update, the new `flowHistory` value will be approximately 95% of the original value.
+As you can see, the function first checks if the `lastSeenBlock` is equal to the `currentBlock`, or if the `flowHistory` is 0. In either of these cases, it simply returns the current `flowHistory` value.
 
-The `Flow` library is used throughout the Gyroscope protocol to track the flow of tokens in and out of the vaults, which is an important input to the [PrimaryAMMV1](/core-contracts/pamm) contract's pricing mechanism.
+If the `lastSeenBlock` is less than the `currentBlock`, it calculates the difference in blocks and raises the `memoryParam` to that power. This is used to calculate the new `flowHistory` value by multiplying the current `flowHistory` by the `memoryParamRaised`.
+
+This exponential moving sum calculation is used throughout the Gyroscope protocol to track the flow of assets in and out of the vaults, which is essential for maintaining the safety and stability of the system.
+
+For more information on how the `Flow` library is used in the Gyroscope protocol, you can refer to the [Vault Flow Data](/core-contracts/igyro-vault#vault-flow-data) section of the IGyroVault documentation.

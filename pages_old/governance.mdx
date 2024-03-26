@@ -1,0 +1,56 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Governance
+
+The Gyroscope protocol employs a robust governance system to ensure the long-term health and evolution of the ecosystem. The key aspects of the governance model are outlined in this section.
+
+## Governor and Governable Contracts
+
+At the heart of the Gyroscope governance system are the **Governor** and **Governable** contracts. The **Governor** contract holds the authority to make changes to the protocol, while the **Governable** contracts are the ones that can be modified by the Governor.
+
+<Callout type="info">
+The Governor is typically a multi-sig wallet or a DAO controlled by the community, ensuring decentralized decision-making.
+</Callout>
+
+The **Governable** contracts in the Gyroscope protocol include:
+
+- [PrimaryAMMV1](/core-contracts/pamm) (the primary AMM pricing mechanism)
+- [IGyroConfig](/core-contracts/igyro-config) (the global configuration contract)
+- [ReserveSafetyManager](/core-contracts/isafety-check) (the contract responsible for checking the safety of mint and redeem operations)
+
+Through the **Governable** contracts, the Governor can update critical parameters, add or remove authorized addresses, and make other important modifications to the protocol.
+
+## Governance Workflow
+
+The typical governance workflow in the Gyroscope protocol is as follows:
+
+<Steps>
+### Step 1: Proposal Submission
+Community members can submit governance proposals to the Governor contract, outlining the changes they believe are necessary for the protocol.
+
+### Step 2: Proposal Review
+The Governor reviews the proposal, evaluates its potential impact, and determines whether it should be put to a vote.
+
+### Step 3: Voting
+If the proposal is accepted, the Governor initiates a voting period, during which the community can participate in the decision-making process.
+
+### Step 4: Execution
+If the proposal is approved by the community, the Governor can then execute the changes by interacting with the relevant Governable contracts.
+</Steps>
+
+This governance model ensures that the Gyroscope protocol can adapt to the evolving needs of the DeFi ecosystem, while maintaining a high degree of community involvement and control.
+
+## Examples of Governance Decisions
+
+Some examples of governance decisions that the Gyroscope community may consider include:
+
+- Adjusting the parameters of the [PrimaryAMMV1](/core-contracts/pamm) contract, such as the `alphaBar`, `xuBar`, or `thetaBar` values, to fine-tune the pricing mechanism.
+- Updating the [IGyroConfig](/core-contracts/igyro-config) contract to add or remove supported assets, adjust fee structures, or modify other global configuration settings.
+- Changing the address of the [ReserveSafetyManager](/core-contracts/isafety-check) contract to upgrade the safety checks for mint and redeem operations.
+- Approving new [IGyroVault](/core-contracts/igyro-vault) implementations to support additional types of liquidity pools.
+
+By empowering the community to make these decisions, the Gyroscope protocol ensures that it remains adaptable and responsive to the needs of its users.
+
+## Conclusion
+
+The Gyroscope governance system is designed to be decentralized, transparent, and community-driven. By leveraging the Governor and Governable contracts, the protocol can evolve over time while maintaining the trust and involvement of its stakeholders. This governance model is a crucial component of the Gyroscope ecosystem, ensuring its long-term sustainability and success.

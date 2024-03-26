@@ -1,0 +1,25 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Oracles
+
+The Gyroscope protocol relies on a set of oracle contracts to obtain accurate and reliable price information for its operations. These oracles are responsible for providing the necessary price data to the core contracts, ensuring the stability and integrity of the overall system.
+
+The Gyroscope protocol utilizes three main oracle contracts:
+
+1. [**CheckedPriceOracle**](/oracles/checked-price-oracle): This oracle performs various checks on the asset prices to ensure their reliability and consistency.
+2. [**IUSDPriceOracle**](/oracles/iusd-price-oracle): This oracle is responsible for providing the USD price of a given asset.
+3. [**IRelativePriceOracle**](/oracles/irelative-price-oracle): This oracle provides the relative price between two assets.
+
+These oracles work together to provide a robust and trustworthy price feed for the Gyroscope protocol, enabling accurate valuation of the protocol's assets and ensuring the safety of its operations.
+
+<Callout type="info">
+The details of the individual oracle contracts, such as `CheckedPriceOracle`, `IUSDPriceOracle`, and `IRelativePriceOracle`, will be covered in their respective sections later in the documentation.
+</Callout>
+
+The Gyroscope protocol utilizes these oracles in various ways, such as:
+
+- **Mint and Redeem Operations**: The oracles provide the necessary price information to the [**IPAMM**](/core-contracts/ipamm) contract, which is responsible for managing the minting and redemption of Gyro Dollars (GYD).
+- **Reserve Management**: The oracles supply price data to the [**IReserve**](/core-contracts/ireserve) contract, which manages the token deposits and withdrawals in the Gyroscope reserve.
+- **Safety Checks**: The [**ISafetyCheck**](/core-contracts/isafety-check) contract uses the oracle prices to ensure the safety of mint and redeem operations, preventing potential exploits or imbalances in the protocol.
+
+By leveraging these specialized oracle contracts, the Gyroscope protocol can maintain accurate and reliable price information, which is crucial for the proper functioning of the entire system.

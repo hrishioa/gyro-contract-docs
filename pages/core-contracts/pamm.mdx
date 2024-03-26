@@ -2,56 +2,48 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # PAMM (PrimaryAMMV1)
 
-The **PAMM (PrimaryAMMV1)** is the core contract responsible for the primary automated market maker (AMM) pricing mechanism in the Gyroscope protocol. It implements the pricing algorithm described in the Gyroscope whitepaper, which aims to provide a stable, sustainable, and capital-efficient stablecoin protocol.
+The **PAMM (PrimaryAMMV1)** contract is the core component responsible for the primary AMM pricing mechanism in the Gyroscope protocol. This contract implements the key algorithms and logic that determine the asset prices, redemption amounts, and other core functionality required for the protocol's stablecoin issuance and redemption.
 
-The PAMM contract is responsible for:
+The PAMM contract is designed to adhere to the pricing model described in the Gyroscope protocol's whitepaper. It utilizes various mathematical functions and parameters to compute the appropriate prices and redemption amounts, ensuring the stability and proper functioning of the Gyroscope stablecoin.
 
-- **Minting**: Calculating the amount of Gyro Dollars (GYD) to mint given a certain amount of input tokens.
-- **Redeeming**: Calculating the amount of output tokens to return given a certain amount of GYD to redeem.
-- **System Parameter Management**: Allowing the protocol's governance to update the key system parameters that define the pricing behavior.
+## Key Responsibilities
 
-Let's dive into the details of how the PAMM contract works.
+The PAMM contract is responsible for the following core functionalities:
 
-## Pricing Algorithm
+- **Pricing Computation**: The PAMM contract is responsible for computing the appropriate prices for the Gyroscope stablecoin based on the current state of the protocol's reserve. This includes calculating the redemption level, reserve value, and total Gyro supply, and then applying the pricing model to determine the stablecoin's value.
+- **Minting and Redemption**: The PAMM contract provides the necessary functions for minting and redeeming Gyro tokens. These functions take into account the current state of the protocol and the requested amounts to compute the appropriate output.
+- **Parameter Management**: The PAMM contract allows for the management of the system parameters, such as the alpha bar, xu bar, theta bar, and outflow memory. These parameters are critical for the proper functioning of the pricing model and can be updated through governance.
 
-The PAMM contract implements the pricing algorithm described in the [Gyroscope whitepaper](/core-contracts/pamm). This algorithm is based on the concept of a *redemption level*, which represents the fraction of the total Gyro Dollar supply that has been redeemed.
+## Pricing Model Implementation
 
-The pricing function is designed to maintain a stable redemption value (in terms of the reserve value per Gyro Dollar) as the redemption level changes. It achieves this by adjusting the reserve value in response to changes in the redemption level, using a set of parameters that can be tuned by the protocol's governance.
-
-The key parameters are:
-
-- **α̅ (alphaBar)**: The maximum value of the marginal reserve-to-supply ratio.
-- **x̄_U (xuBar)**: The upper bound on the redemption level.
-- **θ̅ (thetaBar)**: The target reserve-to-supply ratio.
-
-These parameters can be adjusted by the [Governable](/governance/governable) contract, which is controlled by the protocol's governance.
+The PAMM contract implements the pricing model described in the Gyroscope protocol's whitepaper. This model is based on a set of mathematical propositions and algorithms that determine the relationship between the redemption level, reserve value, and total Gyro supply.
 
 <Callout type="info">
-The specific mathematical formulas and derivations of the pricing algorithm are detailed in the [Gyroscope whitepaper](/core-contracts/pamm). This documentation focuses on the high-level functionality and usage of the PAMM contract.
+For a detailed explanation of the pricing model, please refer to the [Gyroscope whitepaper](/resources/whitepaper).
 </Callout>
 
-## Minting and Redeeming
+The key aspects of the pricing model implementation in the PAMM contract include:
 
-The PAMM contract provides two main functions for interacting with the primary AMM:
+1. **Computed Parameters**: The contract calculates various derived parameters, such as the thresholds for different regions of the pricing model, using the provided system parameters.
+2. **Reserve Computation**: The contract implements the logic to compute the reserve value based on the current state and the requested redemption level.
+3. **Region Identification**: The contract determines the current region of the pricing model based on the normalized state of the protocol.
+4. **Redemption Amount Calculation**: The contract computes the appropriate redemption amount given the requested Gyro amount and the current reserve state.
 
-<Steps>
-### Step 1: Mint GYD
+## Integration with Other Components
 
-Users can call the `mint` function to deposit input tokens and receive the corresponding amount of GYD. The amount of GYD minted is calculated based on the current reserve value and the system parameters.
+The PAMM contract is designed to seamlessly integrate with other key components of the Gyroscope protocol, such as:
 
-### Step 2: Redeem GYD
+- [IGyroConfig](/igyro-config): The PAMM contract uses the global configuration settings managed by the IGyroConfig contract to access important parameters.
+- [IMotherboard](/imotherboard): The PAMM contract is called by the IMotherboard contract during the minting and redemption processes to compute the appropriate amounts.
+- [IReserve](/ireserve): The PAMM contract interacts with the IReserve contract to access the current state of the protocol's reserve.
+- [ISafetyCheck](/isafety-check): The PAMM contract's functionality is complemented by the ISafetyCheck contract, which ensures the safety of minting and redemption operations.
 
-Users can call the `redeem` function to burn GYD and receive the corresponding amount of output tokens. The amount of output tokens received is calculated based on the current reserve value, the system parameters, and the amount of GYD redeemed.
-</Steps>
+By integrating with these other components, the PAMM contract can effectively manage the pricing and issuance of the Gyroscope stablecoin while maintaining the overall stability and security of the protocol.
 
-Both the `mint` and `redeem` functions perform various checks and calculations to ensure the stability and capital efficiency of the protocol. For example, the `redeem` function takes into account the current redemption level and the reserve value, and adjusts the output amount accordingly.
+## Governance and Upgradability
 
-## System Parameter Management
+The PAMM contract is designed to be upgradable and configurable through the Gyroscope protocol's governance mechanisms. This allows the community to make necessary adjustments to the pricing model, system parameters, and other aspects of the contract as needed.
 
-The PAMM contract allows the protocol's governance to update the key system parameters that define the pricing behavior. This is done through the `setSystemParams` function, which can only be called by the [Governable](/governance/governable) contract.
+The contract inherits from the [Governable](/governable) contract, which provides the necessary functionality for managing the contract's governor. This enables authorized parties to update the system parameters, such as the alpha bar, xu bar, theta bar, and outflow memory, through governance proposals and votes.
 
-By allowing the governance to adjust these parameters, the protocol can adapt to changing market conditions and user behavior, ensuring the long-term sustainability and competitiveness of Gyroscope.
-
-## Conclusion
-
-The PAMM contract is the heart of the Gyroscope protocol's pricing mechanism. It implements a sophisticated pricing algorithm designed to maintain a stable redemption value and promote capital efficiency. The ability to update the system parameters through the [Governable](/governance/governable) contract allows the protocol to evolve and adapt over time, ensuring its long-term success.
+Additionally, the PAMM contract can be upgraded to newer versions if necessary, ensuring the protocol's ability to adapt to changing market conditions and user needs over time.

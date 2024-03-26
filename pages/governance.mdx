@@ -2,22 +2,44 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Governance
 
-The Gyroscope protocol utilizes a governance system to manage critical aspects of the ecosystem. This governance model is implemented through two key contracts: [Governable](/governance/governable) and [IGovernable](/governance/igovernable).
+The Gyroscope protocol utilizes a governance system to allow for the updating of critical parameters and functionality. This governance system is essential for maintaining the protocol's long-term viability and adapting to changing market conditions.
 
-The **Governable** contract serves as the base for managing the governor role. It provides the necessary functionality to change the governor, as well as restrict certain actions to only the current governor. This contract ensures that important decisions are made by the designated governor, promoting a secure and controlled evolution of the protocol.
+The core governance contracts in the Gyroscope protocol are:
 
-The **IGovernable** interface defines the standard methods for interacting with the governor. This includes the ability to:
+1. **Governable**: This is the base contract that provides the functionality for managing the governor, i.e., the entity responsible for making governance decisions.
+2. **IGovernable**: This is the interface that defines the governor management functions, such as changing the governor and accepting governance.
 
-- Change the current governor
-- Accept governance transfer
-- Check the current and pending governors
+<Callout type="info">
+The details of the `Governable` and `IGovernable` contracts are covered in their respective sections later in this document.
+</Callout>
 
-Governa nce in the Gyroscope protocol is crucial for maintaining the integrity and long-term sustainability of the system. It allows the community to collectively make decisions that shape the protocol's future, such as:
+The governance process in Gyroscope works as follows:
 
-- Updating system parameters in the [PAMM](/core-contracts/pamm) contract
-- Registering and deregistering [IGyroVault](/core-contracts/igyro-vault) instances
-- Configuring the [IGyroConfig](/core-contracts/igyro-config) settings
-- Authorizing [IMotherboard](/core-contracts/imotherboard) actions
-- Managing [IReserve](/core-contracts/ireserve) permissions
+1. **Proposing Changes**: Anyone can propose changes to the protocol by submitting a governance proposal. This could include updating system parameters, adding new vaults, or modifying existing functionality.
+2. **Voting**: Once a proposal is submitted, Gyroscope token holders can vote on whether to accept or reject the changes. The voting process is weighted based on the amount of Gyroscope tokens held by each voter.
+3. **Execution**: If the proposal is approved by the Gyroscope community, the changes are executed by the current governor.
 
-By utilizing a well-designed governance framework, the Gyroscope protocol can adapt to changing market conditions, incorporate community feedback, and ensure the long-term success of the decentralized ecosystem.
+The [IGyroConfig](/igyro-config) contract is a key component of the governance system, as it stores and manages the global configuration settings for the protocol. This includes parameters like the PAMM system parameters, vault metadata, and other critical values.
+
+<Callout type="warning">
+It's important to note that changes to the Gyroscope protocol can have significant consequences, both positive and negative. Therefore, the governance process is designed to be deliberate and well-considered, with multiple checks and balances to ensure the long-term stability and success of the protocol.
+</Callout>
+
+The [IMotherboard](/imotherboard) contract acts as the central hub for the Gyroscope protocol, coordinating the interactions between the various components. This includes invoking the governance-protected functions, such as updating the PAMM system parameters or adding new vaults to the reserve.
+
+<Steps>
+### Step 1
+To better understand the governance process, let's consider an example scenario where the Gyroscope community wants to update the PAMM system parameters:
+
+1. A Gyroscope token holder submits a governance proposal to update the PAMM `alphaBar`, `xuBar`, `thetaBar`, and `outflowMemory` parameters.
+2. The Gyroscope community reviews the proposal and discusses the potential impacts of the changes.
+3. Gyroscope token holders vote on the proposal, with the vote weighted by the amount of tokens held by each voter.
+4. If the proposal is approved by the community, the current governor executes the changes by calling the `setSystemParams` function on the [PAMM](/pamm) contract.
+
+### Step 2
+The [IGyroConfig](/igyro-config) contract plays a crucial role in the governance process, as it allows the governor to update various configuration settings for the protocol. For example, the governor could use the `setUint` and `setAddress` functions to modify the PAMM system parameters or add a new vault to the reserve.
+
+These governance-protected functions can only be called by the current governor, ensuring that changes to the protocol are made in a controlled and secure manner.
+</Steps>
+
+The Gyroscope governance system is designed to be flexible and adaptable, allowing the protocol to evolve over time to meet the needs of its users. By empowering the Gyroscope community to propose and vote on changes, the protocol can remain responsive to market conditions and continue to innovate.

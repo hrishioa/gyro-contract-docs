@@ -2,28 +2,40 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # IGovernable
 
-The `IGovernable` interface defines the core functionality for managing the governance of a contract in the Gyroscope protocol. This interface is crucial for ensuring that protocol-level decisions, such as parameter updates or contract upgrades, are controlled and executed through a well-defined governance process.
+The `IGovernable` interface is a crucial component of the Gyroscope protocol, as it provides the foundation for **governance** and **access control** across the various contracts within the system.
 
-The `IGovernable` interface provides the following key features:
+In the Gyroscope protocol, several critical functions and configurations are **protected** and can only be modified by authorized entities, such as the **governor**. The `IGovernable` interface defines the standard for how this governance system should be implemented, ensuring consistency and security across the codebase.
 
-**Governor Management**
-- The `governor()` function returns the current governor of the contract.
-- The `pendingGovernor()` function returns the pending governor that has been requested but not yet accepted.
-- The `changeGovernor(address newGovernor)` function allows the current governor to request a change to a new governor.
-- The `acceptGovernance()` function allows the pending governor to accept the governance change, making them the new governor.
+<Callout type="info">
+The governor is a special account that has the authority to perform certain privileged actions, such as updating system parameters or changing the protocol's configuration.
+</Callout>
 
-These functions enable a structured process for transferring governance control, where a new governor must be explicitly proposed and then accepted, providing a layer of security and accountability.
+The `IGovernable` interface defines the following key features:
 
-**Governance-Only Access Control**
-The `governanceOnly` modifier ensures that only the current governor can execute a particular function. This is an important access control mechanism that restricts sensitive protocol-level actions to the governance process, preventing unauthorized modifications.
+## Governor Management
 
-**Events**
-The interface also defines two events that are emitted when governance changes occur:
-- `GovernorChanged(address oldGovernor, address newGovernor)`: Emitted when the governor is changed.
-- `GovernorChangeRequested(address newGovernor)`: Emitted when a governor change is requested.
+- **Changing the Governor**: The `changeGovernor` function allows the current governor to transfer governance to a new address.
+- **Accepting Governance**: The `acceptGovernance` function allows a pending governor to officially assume the governance role.
 
-These events provide a transparent record of governance changes, allowing external parties to track and monitor the protocol's governance evolution.
+## Governance Events
 
-The `IGovernable` interface is a crucial building block for the Gyroscope protocol, ensuring that the core functionality and decision-making processes are subject to a well-defined and secure governance model. By using this interface, Gyroscope can maintain the flexibility to adapt and evolve over time while preserving the trust and confidence of its users and stakeholders.
+The `IGovernable` interface also defines two important events that are emitted when the governor is changed:
 
-For examples of how the `IGovernable` interface is implemented, you can refer to the [Governable](/governance/governable) contract, which serves as a base implementation for governor management.
+- `GovernorChanged`: Emitted when the governor is changed.
+- `GovernorChangeRequested`: Emitted when a change in the governor is requested.
+
+These events are crucial for **monitoring** and **auditing** the protocol's governance changes.
+
+## Usage in the Gyroscope Protocol
+
+The `IGovernable` interface is implemented by several key contracts in the Gyroscope protocol, including:
+
+- [PrimaryAMMV1](/pamm): The primary AMM pricing mechanism
+- [IGyroConfig](/igyro-config): The global configuration management contract
+- [ReserveSafetyManager](/isafety-check): The contract responsible for checking the safety of mint and redeem operations
+
+By using the `IGovernable` interface, these contracts ensure that any changes to their critical functionality can only be made by the authorized governor, maintaining the overall security and integrity of the Gyroscope protocol.
+
+<Callout type="tip">
+To learn more about the governor and governance in the Gyroscope protocol, refer to the [Governance](/governance) section.
+</Callout>

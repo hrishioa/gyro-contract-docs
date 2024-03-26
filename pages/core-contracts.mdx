@@ -2,22 +2,33 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Core Contracts
 
-The Gyroscope protocol is built upon a set of core contracts that handle various aspects of the system's functionality. These contracts work together to provide a robust and decentralized infrastructure for the Gyroscope stablecoin. Let's dive into the key components of the core contracts:
+The Gyroscope protocol is built upon a set of core contracts that handle the fundamental functionality of the system. These contracts are responsible for managing the primary AMM pricing mechanism, the reserve of vaults, the global configuration, and the safety checks for minting and redemption operations.
 
-**Primary AMM (PAMM)**: The [PAMM](/core-contracts/pamm) contract is the heart of the Gyroscope protocol, responsible for the primary automated market maker (AMM) pricing mechanism. It uses a novel mathematical model to determine the pricing and redemption dynamics of the Gyro dollar (GYD) token.
+Let's dive into the key contracts in the Gyroscope protocol:
 
-**IPAMM Interface**: The [IPAMM](/core-contracts/ipamm) interface defines the contract's public API, allowing interactions with the PAMM contract from other parts of the protocol.
+## PAMM (PrimaryAMMV1)
+The [PAMM](/core-contracts/pamm) contract implements the primary AMM pricing mechanism for the Gyroscope protocol. It is responsible for computing the amount of GYD tokens to mint or redeem based on the current state of the reserve. This contract uses sophisticated mathematical models to ensure the stability and sustainability of the Gyroscope stablecoin.
 
-**Gyro Configuration (IGyroConfig)**: The [IGyroConfig](/core-contracts/igyro-config) contract stores and manages the global configuration settings for the Gyroscope protocol. This includes parameters like asset addresses, protocol fees, and other crucial values.
+## IPAMM
+The [IPAMM](/core-contracts/ipamm) interface defines the public API for interacting with the primary AMM pricing mechanism. It allows users and other contracts to query the minting and redemption amounts, as well as to update the system parameters.
 
-**Gyro Vaults (IGyroVault)**: The [IGyroVault](/core-contracts/igyro-vault) interface defines the functionality of the vault components in the Gyroscope reserve. Vaults represent the different underlying pools (e.g., Balancer, Curve, Uniswap) and are responsible for handling deposits, withdrawals, and other vault-specific operations.
+## IGyroConfig
+The [IGyroConfig](/core-contracts/igyro-config) interface is responsible for storing and managing the global configuration settings of the Gyroscope protocol. This includes parameters like fee rates, oracle addresses, and other critical system settings. The configuration can be updated through governance.
 
-**Motherboard (IMotherboard)**: The [IMotherboard](/core-contracts/imotherboard) contract serves as the central hub, connecting the various pieces of the Gyroscope protocol. It handles the main minting and redemption functionality, as well as providing a dry-run capability to test these operations.
+<Callout type="info">
+The configuration is stored in a separate contract to ensure that it can be easily updated without the need to redeploy the entire protocol.
+</Callout>
 
-**Reserve (IReserve)**: The [IReserve](/core-contracts/ireserve) interface defines the contract responsible for managing the token deposits and withdrawals in the Gyroscope protocol. It allows authorized entities to deposit and withdraw tokens from the reserve.
+## IGyroVault
+The [IGyroVault](/core-contracts/igyro-vault) interface defines the functionality for a vault component in the Gyroscope reserve. Vaults are responsible for holding the underlying tokens that back the GYD stablecoin. They provide methods for depositing, withdrawing, and managing the tokens in the vault.
 
-**Safety Check (ISafetyCheck)**: The [ISafetyCheck](/core-contracts/isafety-check) interface ensures the safety of mint and redeem operations by performing various checks, such as verifying price stability and vault weight changes.
+## IMotherboard
+The [IMotherboard](/core-contracts/imotherboard) interface is the central contract that connects the different pieces of the Gyroscope protocol. It provides the main entry points for minting and redeeming GYD tokens, and coordinates the interactions between the various core contracts.
 
-These core contracts form the foundation of the Gyroscope protocol, providing the essential functionality and security measures needed to operate a decentralized stablecoin system. Understanding the roles and interactions between these contracts is crucial for developers building on top of the Gyroscope ecosystem.
+## IReserve
+The [IReserve](/core-contracts/ireserve) interface defines the functionality for the reserve contract, which manages the deposits and withdrawals of tokens in the Gyroscope protocol. It allows authorized managers to deposit and withdraw tokens from the reserve, and emits events for these actions.
 
-For more detailed information on each of these core contracts, please refer to their respective sections.
+## ISafetyCheck
+The [ISafetyCheck](/core-contracts/isafety-check) interface specifies the safety checks that must be performed before a minting or redemption operation can be executed. These checks ensure that the proposed changes to the reserve are safe and do not compromise the stability of the Gyroscope stablecoin.
+
+By understanding the roles and interactions of these core contracts, developers can build a comprehensive understanding of the Gyroscope protocol and its inner workings. This knowledge will be crucial for building applications and integrating with the Gyroscope ecosystem.

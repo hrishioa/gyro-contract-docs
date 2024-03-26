@@ -1,0 +1,57 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# LogExpMath
+
+The `LogExpMath` library provides a set of mathematical functions that utilize logarithms and exponentiation. These operations are essential for the primary AMM pricing mechanism in the Gyroscope protocol, as described in the [PAMM](/core-contracts/pamm) section.
+
+The library includes the following key functions:
+
+## `computeAlpha`
+
+This function calculates the value of the `α` parameter, which represents the price impact function in the PAMM. It uses the formula derived in Proposition 3 of the Gyroscope whitepaper, which depends on the reserve balance `b`, the total supply `y`, and the parameters `θ̄` and `ᾱ`.
+
+<Callout type="info">
+The `computeAlpha` function is a crucial component of the PAMM's pricing mechanism, as it determines how the price changes in response to changes in the reserve balance and total supply.
+</Callout>
+
+## `computeReserveFixedParams`
+
+This function calculates the new reserve balance `b` based on the current redemption level `x`, the previous reserve balance `b`, the total supply `y`, the price impact parameter `α`, and the thresholds `x_U` and `x_L`. It implements the formula from Proposition 1 in the Gyroscope whitepaper.
+
+<Callout type="info">
+The `computeReserveFixedParams` function is used to determine the new reserve balance after a user interacts with the PAMM, either by minting or redeeming Gyro Dollars.
+</Callout>
+
+## `computeXl`
+
+This function calculates the value of the lower threshold `x_L`, which represents the point at which the price impact function changes its behavior. It uses the formula from Proposition 2 in the Gyroscope whitepaper.
+
+<Callout type="warning">
+The `computeXl` function requires special handling to avoid potential underflow errors, which are addressed in the implementation.
+</Callout>
+
+## `computeXu`
+
+This function calculates the value of the upper threshold `x_U`, which represents the point at which the price impact function changes its behavior. It uses the formula from Proposition 4 in the Gyroscope whitepaper.
+
+<Callout type="info">
+The `computeXu` function ensures that the calculated `x_U` value does not exceed the maximum allowed value, which is related to the `x̄_U` parameter.
+</Callout>
+
+## `computeBa`
+
+This function calculates the reserve balance `b` based on the upper threshold `x_U` and the protocol parameters. It implements the formula from Lemma 4 in the Gyroscope whitepaper.
+
+<Callout type="info">
+The `computeBa` function is used to determine the reserve balance for a given redemption level and protocol parameters.
+</Callout>
+
+## `createDerivedParams`
+
+This function takes the protocol parameters and calculates a set of derived parameters, such as the thresholds for the different regions of the PAMM's price impact function. It follows the algorithm described in Algorithm 1 of the Gyroscope whitepaper.
+
+<Callout type="info">
+The `createDerivedParams` function is used to pre-compute and cache the derived parameters, which can improve the performance of the PAMM's pricing calculations.
+</Callout>
+
+By providing these mathematical functions, the `LogExpMath` library plays a crucial role in the implementation of the PAMM's pricing mechanism in the Gyroscope protocol. Understanding these functions and their underlying formulas from the Gyroscope whitepaper is essential for developers working on the core protocol.

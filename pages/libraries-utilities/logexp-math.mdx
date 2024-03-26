@@ -2,34 +2,60 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # LogExpMath
 
-The LogExpMath library provides mathematical functions that utilize logarithms and exponentiation. These operations are essential for certain pricing algorithms used in the Gyroscope protocol, particularly in the [PAMM](/core-contracts/pamm) contract.
+The **LogExpMath** library provides a set of mathematical functions that use logarithms and exponentiation to perform various computations. This library is crucial for the Gyroscope protocol, as it is used in the [PAMM](/core-contracts/pamm) contract to calculate the reserve's value and the amount of GYD to mint or redeem.
 
-The library includes the following key functions:
+## Logarithmic Functions
 
-## `computeAlpha`
+The library provides two main logarithmic functions:
 
-This function computes the alpha value, which is a crucial parameter in the Gyroscope pricing model. The alpha value is determined based on the ratio of the reserve balance (`ba`) to the total Gyro supply (`ya`), as well as the system parameter `thetaBar`.
+1. **`log`**: This function calculates the natural logarithm of a given number. It is used to compute various intermediate values in the PAMM's pricing algorithm.
 
-## `computeReserveFixedParams`
+2. **`exp`**: This function calculates the exponential of a given number. It is used to undo the logarithmic transformations and obtain the final results.
 
-This function calculates the reserve value given the redemption level (`x`), the reserve balance (`ba`), the total Gyro supply (`ya`), the alpha value, and the system parameters `xu` and `xl`. It handles different cases depending on the value of `x` relative to `xu` and `xl`.
+These logarithmic functions are particularly useful when working with large numbers, as they help to avoid numerical overflow and underflow issues.
 
-## `computeXl`
+<Callout type="info">
+The logarithmic functions in this library are implemented using a Taylor series expansion, which provides a good balance between accuracy and gas efficiency.
+</Callout>
 
-This function computes the value of `xl`, which is the threshold for the redemption level that separates different pricing regions. The calculation involves the reserve balance (`ba`), the total Gyro supply (`ya`), the alpha value, and the system parameter `xuBar`.
+## Fixed-Point Arithmetic
 
-## `computeXu`
+In addition to the logarithmic functions, the **LogExpMath** library also provides support for fixed-point arithmetic. This is important because the Gyroscope protocol deals with values that need to be represented with high precision, such as token prices and balances.
 
-This function computes the value of `xu`, which is the threshold for the redemption level that separates different pricing regions. The calculation involves the reserve balance (`ba`), the total Gyro supply (`ya`), the alpha value, and the system parameter `xuBar`.
+The library defines the `FixedPoint` struct, which represents a fixed-point number with 18 decimal places. The `FixedPoint` struct provides the following operations:
 
-## `computeBa`
+- **Addition** and **Subtraction**
+- **Multiplication** and **Division**
+- **Exponentiation**
+- **Comparison** (greater than, less than, equal to)
 
-This function computes the reserve balance (`ba`) given the redemption level (`xu`) and the system parameters.
+These fixed-point arithmetic operations are heavily used throughout the Gyroscope protocol, including in the [PAMM](/core-contracts/pamm) contract, to ensure that calculations are performed with the required precision.
 
-## `createDerivedParams`
+<Callout type="warning">
+It is crucial to use the fixed-point arithmetic operations provided by the `FixedPoint` struct, as direct use of Solidity's built-in arithmetic operators can lead to unintended rounding errors and incorrect results.
+</Callout>
 
-This function creates a set of derived parameters, such as the thresholds for different pricing regions, based on the system parameters. These derived parameters are used throughout the Gyroscope protocol to optimize computations and improve efficiency.
+## Examples
 
-The LogExpMath library is a crucial component of the Gyroscope protocol, as it provides the mathematical foundation for the primary AMM pricing mechanism implemented in the [PAMM](/core-contracts/pamm) contract. By encapsulating these complex mathematical operations, the library helps to ensure the correctness and reliability of the Gyroscope pricing model.
+Here's an example of how the `log` and `exp` functions can be used in the context of the Gyroscope protocol:
 
-If you're interested in understanding the intricacies of the Gyroscope pricing algorithm, the LogExpMath library is a great place to start. Its well-documented functions and clear purpose make it an invaluable resource for Gyroscope developers and protocol contributors.
+```solidity
+uint256 x = 1e18; // A value of 1 (18 decimal places)
+uint256 logX = LogExpMath.log(x); // Compute the natural logarithm of 1, which is 0
+uint256 expLogX = LogExpMath.exp(logX); // Compute the exponential of 0, which is 1 (18 decimal places)
+```
+
+In this example, we first define a value `x` with 18 decimal places, representing the value 1. We then use the `log` function to compute the natural logarithm of `x`, which is 0. Finally, we use the `exp` function to compute the exponential of 0, which should result in the original value of 1 (with 18 decimal places).
+
+The fixed-point arithmetic operations can be used as follows:
+
+```solidity
+uint256 a = 1e18; // 1
+uint256 b = 2e18; // 2
+uint256 c = FixedPoint.mulDown(a, b); // 2 (18 decimal places)
+uint256 d = FixedPoint.divDown(b, a); // 2 (18 decimal places)
+```
+
+In this example, we define two fixed-point values `a` and `b`, representing 1 and 2, respectively. We then use the `mulDown` and `divDown` functions to perform multiplication and division, respectively. The results are also fixed-point values with 18 decimal places.
+
+Remember, the **LogExpMath** library is a crucial component of the Gyroscope protocol, as it provides the necessary mathematical functions and fixed-point arithmetic to ensure the correct calculation of token prices, balances, and other important protocol metrics.

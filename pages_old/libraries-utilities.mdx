@@ -1,0 +1,35 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Libraries and Utilities
+
+The Gyroscope protocol utilizes a number of specialized libraries and utility contracts to support its core functionality. These components provide essential mathematical operations, data structures, and other common functionality that is leveraged across the protocol. Let's dive into a few of the key libraries and utilities.
+
+## EnumerableExtensions
+
+[EnumerableExtensions](/libraries-utilities/enumerable-extensions) is a library that provides extensions for working with enumerable sets and arrays, simplifying common operations.
+
+## Flow
+
+[Flow](/libraries-utilities/flow) is a library that calculates exponential moving sums, a key component of the [PAMM](/core-contracts/pamm) contract's redemption flow tracking.
+
+## ConfigHelpers
+
+[ConfigHelpers](/libraries-utilities/config-helpers) is a utility contract that provides helper functions for interacting with the [IGyroConfig](/core-contracts/igyro-config) contract, which manages the protocol's global configuration settings.
+
+## LogExpMath
+
+[LogExpMath](/libraries-utilities/logexp-math) is a library that implements mathematical functions using logarithms and exponentiation, crucial for the complex pricing calculations in the [PAMM](/core-contracts/pamm) contract.
+
+<Callout type="info">
+The logarithmic and exponential functions provided by this library are essential for the complex pricing calculations performed in the [PAMM](/core-contracts/pamm) contract.
+</Callout>
+
+## FixedPoint
+
+[FixedPoint](/libraries-utilities/fixed-point) is a library that provides fixed-point arithmetic operations, allowing the protocol to work with high-precision decimal values without risking overflow or underflow errors.
+
+<Callout type="tip">
+The use of fixed-point arithmetic in the Gyroscope protocol ensures that calculations can be performed with a high degree of precision, minimizing the risk of numerical errors that could impact the protocol's pricing and redemption mechanics.
+</Callout>
+
+These libraries and utilities play a vital role in the Gyroscope protocol, enabling the core contracts to perform complex calculations and data manipulation tasks efficiently and reliably. By encapsulating common functionality in these reusable components, the protocol's codebase remains modular, maintainable, and easy to understand for developers working on the project.

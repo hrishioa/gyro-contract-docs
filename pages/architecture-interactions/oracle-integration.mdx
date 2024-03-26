@@ -1,0 +1,65 @@
+import { Callout, Steps, Step } from "nextra-theme-docs";
+
+# Oracle Integration
+
+The Gyroscope protocol relies on a robust and reliable price oracle system to determine the current market value of assets used in the minting and redemption processes. The oracle integration in the Gyroscope protocol is designed to provide accurate, up-to-date, and tamper-resistant pricing data to ensure the fairness and stability of the system.
+
+## Decentralized Oracle Architecture
+
+The Gyroscope protocol utilizes a decentralized oracle architecture to aggregate pricing data from multiple sources, including on-chain oracles, off-chain data feeds, and trusted price providers. This approach enhances the reliability and resilience of the oracle system, as it reduces the reliance on any single data source and mitigates the risk of manipulation or failure of a particular oracle.
+
+<Callout type="info">
+The decentralized oracle architecture of the Gyroscope protocol helps to ensure that the pricing data used in the minting and redemption processes is accurate, up-to-date, and resistant to manipulation.
+</Callout>
+
+## Price Oracle Contracts
+
+The key oracle contracts in the Gyroscope protocol are:
+
+- [CheckedPriceOracle](/core-contracts/checked-price-oracle): This contract performs various checks on the asset prices to ensure their reliability and consistency.
+- [IUSDPriceOracle](/core-contracts/iusd-price-oracle): This interface defines the contract responsible for providing the USD price of assets.
+- [IRelativePriceOracle](/core-contracts/irelative-price-oracle): This interface defines the contract responsible for providing the relative prices between asset pairs.
+
+These contracts work together to provide a comprehensive and reliable pricing system for the Gyroscope protocol.
+
+## Price Validation and Consistency Checks
+
+The Gyroscope protocol employs a multi-layered approach to validate and ensure the consistency of the pricing data used in the minting and redemption processes.
+
+<Steps>
+### Step 1
+The [CheckedPriceOracle](/core-contracts/checked-price-oracle) contract performs the following checks on the asset prices:
+
+- Ensures that the WETH/USD price is within a certain deviation from the prices provided by trusted price oracles.
+- Checks the consistency of the relative prices between assets, ensuring that the implied USD price from the relative price matches the direct USD price.
+- Applies a maximum relative price deviation threshold to ensure that the prices are not too volatile or divergent.
+
+### Step 2
+The [ISafetyCheck](/core-contracts/isafety-check) interface defines the contract responsible for checking the safety of mint and redeem operations. This contract performs additional checks on the vault metadata, including:
+
+- Ensuring that all stablecoins in the vaults are trading within an acceptable range of their peg.
+- Verifying that at least one of the token prices in each vault is above a minimum threshold to avoid numerical errors.
+- Checking that the proposed mint or redeem operation would not cause any vault to deviate too far from its ideal weight.
+
+These safety checks help to mitigate the risks of sudden price movements or imbalances in the reserve, ensuring the stability and reliability of the Gyroscope protocol.
+</Steps>
+
+## Multisource Price Aggregation
+
+To further enhance the resilience and accuracy of the pricing data, the Gyroscope protocol aggregates prices from multiple sources, including on-chain oracles, off-chain data feeds, and trusted price providers. This approach helps to reduce the impact of potential manipulation or failures of individual data sources.
+
+The [CheckedPriceOracle](/core-contracts/checked-price-oracle) contract implements a robust price aggregation algorithm that:
+
+- Identifies the minimum TWAP (Time-Weighted Average Price) across a set of on-chain price feeds.
+- Combines this TWAP value with the prices provided by a set of trusted off-chain price oracles.
+- Computes the median of the aggregated prices to determine the final asset price used in the Gyroscope protocol.
+
+This multi-source price aggregation ensures that the Gyroscope protocol has access to accurate and reliable pricing data, even in the face of potential vulnerabilities or disruptions in individual data sources.
+
+## Integration with External Oracles
+
+The Gyroscope protocol is designed to be flexible and allow for the integration of various external oracle providers. The [IUSDPriceOracle](/core-contracts/iusd-price-oracle) and [IRelativePriceOracle](/core-contracts/irelative-price-oracle) interfaces define the required methods for integrating with external USD and relative price oracles, respectively.
+
+This modular design allows the Gyroscope protocol to easily adapt to changes in the DeFi ecosystem, such as the emergence of new oracle providers or the deprecation of existing ones. By abstracting the oracle integration behind well-defined interfaces, the core protocol logic remains stable and resilient to changes in the underlying data sources.
+
+In summary, the Gyroscope protocol's oracle integration is a crucial component that ensures the reliability, fairness, and stability of the minting and redemption processes. The decentralized architecture, price validation checks, and multi-source price aggregation work together to provide a robust and tamper-resistant pricing system, while the modular design allows for easy integration of external oracle providers as the DeFi landscape evolves.
