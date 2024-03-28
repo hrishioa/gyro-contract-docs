@@ -2,6 +2,7 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Architecture and Interactions
 
+
 The Gyroscope protocol is built on a modular architecture, with each core component interacting with the others through well-defined interfaces. This allows for flexibility, extensibility, and easier upgradability of the system. Let's dive into the key components and how they work together.
 
 At the heart of the Gyroscope protocol is the [Motherboard](/architecture-interactions/imotherboard) contract, which acts as the central hub, connecting the various parts of the system. The Motherboard is responsible for handling the minting and redemption of the Gyroscope dollar (GYD) token, coordinating with the [PAMM (Primary AMM)](/core-contracts/pamm), the [Reserve](/core-contracts/ireserve), and the [Vaults](/core-contracts/igyro-vault).
