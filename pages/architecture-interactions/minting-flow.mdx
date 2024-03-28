@@ -2,63 +2,65 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Minting Flow
 
-The minting flow in the Gyroscope protocol is a crucial process that allows users to convert their assets into the protocol's native token, the Gyro Dollar (GYD). This flow involves several steps and interactions between the core Gyroscope contracts, ensuring the integrity and safety of the minting process.
+The minting process in the Gyroscope protocol is a crucial operation that allows users to deposit tokens into the reserve and receive Gyroscope Dollars (GYD) in return. This section outlines the key steps involved in the minting process.
 
-## Overview
+## Prepare the Order
 
-The minting process begins when a user initiates a mint operation, providing the necessary assets and specifying the desired amount of GYD to be minted. The Gyroscope protocol then orchestrates the following steps to execute the mint:
+Before initiating a mint, the user needs to prepare the necessary information for the `mint` function call. This includes:
+
+1. **Mint Assets**: The user specifies the tokens they want to deposit, along with the corresponding amounts and the destination vaults for those tokens.
+2. **Minimum Received Amount**: The user sets the minimum amount of GYD they expect to receive in return for their deposit.
+
+<Callout type="info">
+The `MintAsset` struct is used to represent the tokens, amounts, and destination vaults for the mint operation.
+</Callout>
+
+## Invoke the Mint Function
+
+Once the order is prepared, the user can call the `mint` function on the `IMotherboard` contract. This function performs the following steps:
 
 <Steps>
-### Step 1: Validating the Mint Order
+### Step 1
 
-The mint order is first validated by the [ReserveSafetyManager](/isafety-check/isafety-check) contract. This contract checks the following:
+The `IMotherboard` contract checks the safety of the mint operation by calling the `ISafetyCheck` contract. This ensures that the proposed mint would not cause any issues with the protocol's state, such as unbalanced vaults or stablecoins deviating from their peg.
 
-- The asset prices are within acceptable ranges, ensuring that the mint operation will not introduce significant price distortions.
-- The resulting weights of the vaults in the reserve are within the allowed deviation from their ideal weights, or that the operation will move the weights closer to the ideal.
-- The stablecoins in the reserve are all trading within an acceptable range of their target peg.
+### Step 2
 
-If the mint order is deemed safe, the validation process proceeds to the next step.
+If the mint is deemed safe, the `IMotherboard` contract proceeds to execute the mint operation. It first deposits the user's tokens into the appropriate vaults, as specified in the `MintAsset` struct.
 
-### Step 2: Applying Fees
+### Step 3
 
-The [IFeeHandler](/core-contracts/ifee-handler) contract is then called to apply any applicable fees to the mint operation. These fees can be used for various purposes, such as funding protocol development, providing incentives, or maintaining the stability of the system.
+Next, the `IMotherboard` contract calls the `IPAMM` contract to compute the amount of GYD to mint based on the deposited tokens and the current state of the reserve.
 
-### Step 3: Minting GYD Tokens
+### Step 4
 
-Once the order has been validated and the fees have been applied, the [IMotherboard](/core-contracts/imotherboard) contract is called to perform the actual minting of GYD tokens. This contract interacts with the [IGYDToken](/core-contracts/igyd-token) contract to mint the requested amount of GYD tokens and allocate them to the user's address.
-
-### Step 4: Depositing Assets into the Reserve
-
-The assets provided by the user for the mint operation are then deposited into the [IReserve](/core-contracts/ireserve) contract. This contract manages the protocol's reserve of tokens, which is used to back the GYD tokens and provide liquidity for various operations.
-
-### Step 5: Updating the Reserve State
-
-Finally, the [IReserveManager](/core-contracts/ireserve-manager) contract is called to update the state of the reserve, including the new balances of the vaults and the overall reserve value. This information is used by other components of the Gyroscope protocol, such as the [IPAMM](/core-contracts/ipamm) contract, to maintain accurate pricing and redemption calculations.
+The `IMotherboard` contract then mints the calculated GYD amount and transfers it to the user.
 </Steps>
 
-The minting flow can be visualized using the following mermaid diagram:
+## Minting Workflow Diagram
+
+The minting workflow can be represented by the following Mermaid diagram:
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant ReserveSafetyManager
-    participant FeeHandler
-    participant Motherboard
-    participant GYDToken
-    participant Reserve
-    participant ReserveManager
+    participant IMotherboard
+    participant ISafetyCheck
+    participant IPAMM
 
-    User->>ReserveSafetyManager: Validate Mint Order
-    ReserveSafetyManager->>User: Approve Mint Order
-
-    User->>FeeHandler: Apply Fees
-    FeeHandler->>Motherboard: Mint GYD Tokens
-
-    Motherboard->>GYDToken: Mint GYD Tokens
-    Motherboard->>Reserve: Deposit Assets
-
-    Reserve->>ReserveManager: Update Reserve State
-    ReserveManager->>IPAMM: Notify of Reserve Update
+    User->>IMotherboard: mint(MintAsset[], minReceivedAmount)
+    IMotherboard->>ISafetyCheck: isMintSafe(Order)
+    ISafetyCheck-->>IMotherboard: boolean
+    IMotherboard->>IMotherboard: deposit tokens into vaults
+    IMotherboard->>IPAMM: computeMintAmount(usdAmount, reserveUSDValue)
+    IPAMM-->>IMotherboard: mintedGYDAmount
+    IMotherboard->>User: transfer mintedGYDAmount
 ```
 
-The minting flow is a crucial part of the Gyroscope protocol, as it allows users to convert their assets into the protocol's native token, the Gyro Dollar (GYD). By following this flow, the protocol ensures the safety and integrity of the minting process, maintaining the stability and trustworthiness of the GYD token.
+The above diagram illustrates the step-by-step process of the minting operation, including the interaction between the user, the `IMotherboard` contract, the `ISafetyCheck` contract, and the `IPAMM` contract.
+
+## Conclusion
+
+The minting flow in the Gyroscope protocol is designed to be secure and efficient. By checking the safety of the mint operation, depositing tokens into the appropriate vaults, and computing the correct amount of GYD to mint, the protocol ensures a smooth and reliable minting experience for users.
+
+For more information on the other key components of the Gyroscope protocol, such as the redemption flow and the oracle integration, please refer to the [Architecture and Interactions](/architecture-interactions) section.

@@ -2,46 +2,62 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # IGyroVault
 
-The `IGyroVault` interface defines the standard interface for a vault component within the Gyroscope protocol. Each vault is a ERC-20 token that represents the ownership of the underlying liquidity pool (e.g. Balancer, Curve, Uniswap) deposited in the vault.
+The **IGyroVault** interface defines the standard for a vault component in the Gyroscope protocol. A vault is a fundamental building block of the Gyroscope reserve, and has a one-to-one mapping to an underlying pool (e.g., a Balancer, Curve, or Uniswap pool).
 
-The key responsibilities of the `IGyroVault` interface are:
+The vault itself is an ERC-20 token that tracks the ownership of the LP tokens deposited in the underlying pool. Additionally, a vault can be associated with a strategy to generate yield on the deposited funds.
 
-1. **Deposit and Withdraw Liquidity**: Allows users to deposit and withdraw the underlying liquidity pool tokens in exchange for the vault's ERC-20 tokens. This is done through the `deposit()`, `depositFor()`, `withdraw()` and `dryWithdraw()` functions.
+Let's dive into the key functions and features of the `IGyroVault` interface:
 
-2. **Vault Token Metadata**: Provides information about the vault's token, such as the name, symbol, and decimals through standard ERC-20 metadata functions.
+## Vault Properties
+The `IGyroVault` interface provides several getters to inspect the properties of a vault:
 
-3. **Underlying Token Information**: Allows retrieving information about the underlying tokens associated with the vault through the `underlying()` and `getTokens()` functions.
+- `vaultType()`: Returns the type of the vault, which can be one of the following: `GENERIC`, `BALANCER_CPMM`, `BALANCER_2CLP`, `BALANCER_3CLP`, or `BALANCER_ECLP`.
+- `underlying()`: Returns the token associated with this vault, which is typically an LP token.
+- `getTokens()`: Returns the underlying tokens associated with this vault, which are the tokens that make up the LP token.
+- `totalUnderlying()`: Returns the total amount of underlying tokens in the vault.
+- `exchangeRate()`: Returns the exchange rate between the underlying tokens and the vault's token.
+- `deployedAt()`: Returns the block at which the vault was deployed.
 
-4. **Total Underlying Balance**: Exposes the total amount of underlying tokens held by the vault through the `totalUnderlying()` function.
-
-5. **Exchange Rate**: Provides the current exchange rate between the vault's token and the underlying tokens through the `exchangeRate()` function.
-
-6. **Strategy Management**: Allows the governance to set the address of the strategy contract to be used for the vault through the `setStrategy()` function.
-
-7. **Deployment Metadata**: Exposes the block number at which the vault was deployed through the `deployedAt()` function.
-
-Here's an example of how the `deposit()` function can be used:
+## Depositing and Withdrawing
+The vault allows users to deposit and withdraw the underlying tokens:
 
 <Steps>
-### Step 1
+### Step 1: Deposit
+Users can deposit the underlying tokens into the vault using the `deposit()` function. This function takes the amount of underlying tokens to deposit and a minimum amount of vault tokens to receive in return.
 
-To deposit underlying tokens into the vault, the user first needs to approve the vault contract to spend the required amount of underlying tokens on their behalf:
-
-```solidity
-IERC20(underlyingToken).approve(vaultAddress, underlyingAmount);
-```
-
-### Step 2
-
-Then, the user can call the `deposit()` function on the vault, passing the amount of underlying tokens to deposit and the minimum number of vault tokens they are willing to receive:
-
-```solidity
-uint256 vaultTokensReceived = IGyroVault(vaultAddress).deposit(underlyingAmount, minVaultTokensOut);
-```
-
-The function will transfer the underlying tokens from the user to the vault, and mint the corresponding amount of vault tokens to the user's address. The returned `vaultTokensReceived` value represents the actual amount of vault tokens minted.
+### Step 2: Withdraw
+Users can withdraw the underlying tokens from the vault using the `withdraw()` function. This function takes the amount of vault tokens to burn and a minimum amount of underlying tokens to receive in return.
 </Steps>
 
-The `IGyroVault` interface is a crucial component of the Gyroscope protocol, as it provides a standardized way for users to interact with the underlying liquidity pools through the vault's ERC-20 token. This abstraction allows for greater flexibility and composability within the broader Gyroscope ecosystem.
+Both the `deposit()` and `withdraw()` functions have a "dry run" version, `dryDeposit()` and `dryWithdraw()`, that allow users to simulate the operation and get the expected results without modifying the state of the vault.
 
-For more information on the Gyroscope protocol architecture and how the `IGyroVault` fits into the bigger picture, please refer to the [Architecture and Interactions](/architecture-interactions/high-level-architecture) section.
+<Callout type="info">
+The `deposit()` and `withdraw()` functions emit events that can be used to track deposit and withdrawal activities.
+</Callout>
+
+## Strategy Management
+The vault can be associated with a strategy to generate yield on the deposited funds. The strategy is managed through the following functions:
+
+- `strategy()`: Returns the address of the current strategy used by the vault.
+- `setStrategy(address strategyAddress)`: Sets the address of the strategy contract that should follow the `IStrategy` interface.
+
+The strategy contract is expected to implement the necessary logic to earn yield on the deposited funds, while the vault serves as the interface for users to interact with the underlying pool.
+
+## Example Usage
+Here's an example of how a user might interact with a `IGyroVault` instance:
+
+```solidity
+IGyroVault vault = IGyroVault(vaultAddress);
+
+// Deposit 100 underlying tokens
+uint256 vaultTokenAmount = vault.deposit(100, 50);
+console.log("Received", vaultTokenAmount, "vault tokens");
+
+// Withdraw 50 vault tokens
+uint256 underlyingAmount = vault.withdraw(50, 10);
+console.log("Received", underlyingAmount, "underlying tokens");
+```
+
+In this example, the user deposits 100 underlying tokens into the vault and receives in return some amount of vault tokens. The user then withdraws 50 vault tokens and receives the corresponding amount of underlying tokens.
+
+For more information on the Gyroscope protocol and its components, please refer to the [Architecture and Interactions](/architecture-interactions) and [Core Contracts](/core-contracts) sections.

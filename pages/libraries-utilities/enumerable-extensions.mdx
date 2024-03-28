@@ -2,73 +2,86 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # EnumerableExtensions
 
-The `EnumerableExtensions` library provides a set of utility functions for working with [enumerable sets](https://docs.soliditylang.org/en/v0.8.9/types.html#enumerablesets) and arrays in Solidity. This library is widely used throughout the Gyroscope protocol to simplify common operations on these data structures.
+EnumerableExtensions is a **library** that provides **utility functions** for working with **enumerable sets** and **arrays** in Solidity. This library helps developers **manage dynamic collections** of elements more efficiently.
 
 ## Enumerable Sets
 
-Enumerable sets are a powerful Solidity data structure that allow you to store a collection of unique values and efficiently iterate over them. The `EnumerableExtensions` library provides the following functions to work with enumerable sets:
+The `EnumerableSet` library provides a set of functions to **create and manipulate enumerable sets**. An enumerable set is a collection of unique elements that maintains the order in which elements were added.
 
-- `at(set, index)`: Returns the value stored at the given `index` in the set.
-- `contains(set, value)`: Checks if the set contains the given `value`.
-- `length(set)`: Returns the number of elements in the set.
-- `add(set, value)`: Adds the `value` to the set, if it's not already present.
-- `remove(set, value)`: Removes the `value` from the set, if it's present.
-- `values(set)`: Returns an array of all the values in the set.
+Some of the key features of the `EnumerableSet` library include:
 
-These functions can be very helpful when you need to perform common operations on enumerable sets, such as iterating over their contents or checking if a specific value is present.
+- **Adding and Removing Elements**: You can easily add and remove elements from the set using the `add` and `remove` functions.
+- **Checking Membership**: The `contains` function allows you to check if a specific element is present in the set.
+- **Iterating over Elements**: You can retrieve the list of elements in the set using the `values` function, which returns an array of the elements.
 
-<Callout type="info">
-The Gyroscope protocol uses enumerable sets extensively to manage various collections, such as the list of registered vaults, the list of trusted price oracles, and the list of assets for relative price checks.
-</Callout>
-
-## Enumerable Arrays
-
-In addition to enumerable sets, the `EnumerableExtensions` library also provides utility functions for working with arrays. These functions can be particularly useful when you need to perform common array operations, such as sorting or finding the minimum or maximum value.
-
-The following functions are available for working with arrays:
-
-- `at(array, index)`: Returns the value stored at the given `index` in the array.
-- `indexOf(array, value)`: Finds the index of the first occurrence of the given `value` in the array.
-- `contains(array, value)`: Checks if the array contains the given `value`.
-- `length(array)`: Returns the number of elements in the array.
-- `push(array, value)`: Adds the `value` to the end of the array.
-- `remove(array, index)`: Removes the element at the given `index` from the array.
-- `values(array)`: Returns a copy of the array.
-- `sort(array)`: Sorts the array in ascending order.
-- `min(array)`: Returns the minimum value in the array.
-- `max(array)`: Returns the maximum value in the array.
-
-These functions can be very helpful when you need to perform common operations on arrays, such as searching for a specific value, removing an element, or sorting the contents.
-
-<Callout type="info">
-The Gyroscope protocol uses enumerable arrays to manage various collections, such as the list of registered asset names, the list of registered asset addresses, and the list of registered stable assets.
-</Callout>
-
-## Examples
-
-Here's an example of how you might use the `EnumerableExtensions` library in the Gyroscope protocol:
+Here's an example of how you might use the `EnumerableSet` library:
 
 ```solidity
-using EnumerableExtensions for EnumerableSet.AddressSet;
+using EnumerableSet for EnumerableSet.AddressSet;
 
-contract AssetRegistry is IAssetRegistry {
-    EnumerableSet.AddressSet private _registeredAssets;
+contract MyContract {
+    using EnumerableSet for EnumerableSet.AddressSet;
 
-    function registerAsset(address assetAddress) external {
-        _registeredAssets.add(assetAddress);
-        emit AssetAddressUpdated("MyAsset", address(0), assetAddress);
+    EnumerableSet.AddressSet private mySet;
+
+    function addElement(address element) public {
+        mySet.add(element);
     }
 
-    function isAssetRegistered(address assetAddress) public view returns (bool) {
-        return _registeredAssets.contains(assetAddress);
+    function removeElement(address element) public {
+        mySet.remove(element);
     }
 
-    function getRegisteredAssets() public view returns (address[] memory) {
-        return _registeredAssets.values();
+    function checkElement(address element) public view returns (bool) {
+        return mySet.contains(element);
+    }
+
+    function getElements() public view returns (address[] memory) {
+        return mySet.values();
     }
 }
 ```
 
-In this example, the `AssetRegistry` contract uses the `EnumerableExtensions` library to manage a set of registered asset addresses. The `registerAsset` function adds a new asset to the registry, the `isAssetRegistered` function checks if an asset is registered, and the `getRegisteredAssets` function returns an array of all registered assets.
+In this example, we're using the `EnumerableSet.AddressSet` to store a set of Ethereum addresses. We can add and remove elements, check if an element is present, and retrieve the entire set of elements.
 
-By using the `EnumerableExtensions` library, the contract can easily perform these common operations on the set of registered assets, without having to implement the low-level logic for managing the data structure.
+<Callout type="info">
+The `EnumerableSet` library also supports `Bytes32Set` and `UintSet` in addition to `AddressSet`.
+</Callout>
+
+## Enumerable Arrays
+
+The `EnumerableExtensions` library also provides utility functions for working with **dynamic arrays**. These functions include:
+
+- **Removing an Element**: The `remove` function allows you to remove an element from an array by value.
+- **Removing an Element by Index**: The `removeAtIndex` function allows you to remove an element from an array by its index.
+- **Checking Membership**: The `contains` function allows you to check if a specific element is present in the array.
+
+Here's an example of how you might use the `EnumerableExtensions` array functions:
+
+```solidity
+using EnumerableExtensions for uint256[];
+
+contract MyContract {
+    uint256[] public myArray;
+
+    function addElement(uint256 element) public {
+        myArray.push(element);
+    }
+
+    function removeElement(uint256 element) public {
+        myArray.remove(element);
+    }
+
+    function removeAtIndex(uint256 index) public {
+        myArray.removeAtIndex(index);
+    }
+
+    function checkElement(uint256 element) public view returns (bool) {
+        return myArray.contains(element);
+    }
+}
+```
+
+In this example, we're using the `EnumerableExtensions` library to work with a dynamic array of `uint256` values. We can add elements, remove elements by value or by index, and check if an element is present in the array.
+
+By using the `EnumerableExtensions` library, you can simplify the management of dynamic collections in your Solidity contracts, making your code more readable, maintainable, and efficient.

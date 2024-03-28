@@ -2,56 +2,67 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # ISafetyCheck
 
-The **ISafetyCheck** interface is a critical component of the Gyroscope protocol, responsible for ensuring the safety and integrity of minting and redemption operations. This contract acts as a gatekeeper, thoroughly vetting the proposed actions before allowing them to proceed.
+The **ISafetyCheck** interface is a crucial component in the Gyroscope protocol, responsible for ensuring the safety and integrity of mint and redeem operations. This contract performs various checks to verify that the proposed actions do not violate the protocol's constraints and can be safely executed.
 
-The primary responsibilities of the `ISafetyCheck` contract are:
+## Safety Checks
 
-1. **Mint Safety Validation**: The `isMintSafe` function checks whether a proposed mint operation is safe to execute. It examines factors such as the current state of the vaults, the proposed changes, and the overall impact on the protocol's stability.
+The `ISafetyCheck` interface defines two main functions:
 
-2. **Redeem Safety Validation**: The `isRedeemSafe` function performs a similar analysis for redemption requests, ensuring that the protocol can safely fulfill the withdrawal without jeopardizing its overall health.
+1. **`isMintSafe(DataTypes.Order memory order)`**: This function checks whether a proposed mint operation is safe. It examines the order, which contains information about the vaults and amounts involved in the mint, and returns an empty string if the operation is safe, or an error message if it is not.
 
-3. **Persistent Safety Checks**: The `checkAndPersistMint` and `checkAndPersistRedeem` functions are called when an actual mint or redeem operation is performed. These methods not only validate the safety of the proposed action but also persist any relevant information for future reference.
+2. **`isRedeemSafe(DataTypes.Order memory order)`**: This function checks whether a proposed redeem operation is safe. It also examines the order and returns an empty string if the operation is safe, or an error message if it is not.
+
+In addition to these two functions, the `ISafetyCheck` interface also defines two more functions:
+
+3. **`checkAndPersistMint(DataTypes.Order memory order)`**: This function first checks the safety of the mint operation using `isMintSafe()`, and then, if the operation is deemed safe, persists the relevant information for the mint.
+
+4. **`checkAndPersistRedeem(DataTypes.Order memory order)`**: This function first checks the safety of the redeem operation using `isRedeemSafe()`, and then, if the operation is deemed safe, persists the relevant information for the redeem.
 
 <Callout type="info">
-The `ISafetyCheck` contract works closely with other key components of the Gyroscope protocol, such as the [IGyroConfig](/igyro-config), [IReserve](/ireserve), and [IVaultRegistry](/ivault-registry) interfaces, to obtain the necessary information for its safety assessments.
+The `checkAndPersist*` functions are only called when an actual mint or redeem operation is performed, whereas the `isSafe*` functions can be used to simulate the operation and check its feasibility without modifying any state.
 </Callout>
 
-## Mint Safety Validation
+## Safety Checks Implementation
 
-The `isMintSafe` function is responsible for evaluating the safety of a proposed mint operation. It performs the following checks:
+The safety checks implemented in the `ISafetyCheck` interface are designed to ensure the following:
 
-1. **Price Safety**: The function ensures that all the tokens involved in the mint operation have prices that are above a configured minimum threshold. This helps prevent issues related to "dust" tokens or highly volatile assets.
+1. **Token Prices**: The checks ensure that all tokens involved in the mint or redeem operation have sufficiently large prices, to avoid numerical errors or dust amounts.
+2. **Stablecoin Peg**: The checks ensure that all stablecoin assets involved in the mint or redeem operation are close enough to their expected peg value (e.g., $1 for USDC).
+3. **Vault Weights**: The checks ensure that the resulting weights of the vaults involved in the operation are within an acceptable range of their ideal weights, or that the operation promotes rebalancing if the vaults are outside the acceptable range.
 
-2. **Stablecoin Peg Deviation**: The function checks that all stablecoin assets in the vaults involved in the mint operation are within an acceptable deviation from their ideal peg value (typically $1 USD). This is crucial to maintain the overall stability of the Gyroscope protocol.
+The implementation of these safety checks is done in the `ReserveSafetyManager` contract, which is an `ISafetyCheck` implementation. The key steps in the safety checks are:
 
-3. **Vault Weight Deviation**: The function verifies that the resulting weights of the vaults involved in the mint operation are within a configured deviation from their ideal weights. This helps ensure that the mint operation does not significantly unbalance the reserve.
+<Steps>
+### Step 1: Build Metadata
 
-4. **Rebalancing Promotion**: If the mint operation would cause some vaults to be outside the acceptable weight deviation, the function checks that the resulting weights would be closer to the ideal weights than the current weights. This helps promote the rebalancing of the reserve.
+The first step is to build a `DataTypes.Metadata` struct that contains all the relevant information about the vaults involved in the mint or redeem operation. This includes the current and resulting weights, prices, and whether the vaults contain stablecoins that are off their peg.
 
-If all these checks pass, the `isMintSafe` function returns an empty string, indicating that the mint operation is safe to execute. Otherwise, it returns an error message describing the specific reason why the operation is not safe.
+### Step 2: Update Metadata with Price Safety
 
-## Redeem Safety Validation
+The next step is to update the `DataTypes.Metadata` struct with information about the price safety of the assets in each vault. This involves checking that all stablecoins are sufficiently close to their peg, and that at least one asset in each vault has a sufficiently large price to avoid numerical errors.
 
-The `isRedeemSafe` function is responsible for evaluating the safety of a proposed redemption operation. It performs the following checks:
+### Step 3: Update Metadata with Epsilon Status
 
-1. **Redeem Feasibility**: The function first ensures that the requested redemption amount can be fulfilled by the available reserves in the involved vaults. This prevents attempts to redeem more than the vaults contain.
+The third step is to update the `DataTypes.Metadata` struct with information about whether the resulting weights of the vaults are within an acceptable range (epsilon) of their ideal weights.
 
-2. **Price Safety**: Similar to the mint safety check, the function ensures that all the tokens involved in the redeem operation have prices that are above a configured minimum threshold.
+### Step 4: Evaluate Safety Conditions
 
-3. **Vault Weight Deviation**: The function verifies that the resulting weights of the vaults involved in the redeem operation are within a configured deviation from their ideal weights. This helps ensure that the redeem operation does not significantly unbalance the reserve.
+The final step is to evaluate the safety conditions based on the information in the `DataTypes.Metadata` struct. This includes checking that:
+1. All vaults are using sufficiently large token prices.
+2. All stablecoins are either on their peg or the operation promotes rebalancing of the vaults with off-peg stablecoins.
+3. All vaults are either within the acceptable weight range or the operation promotes rebalancing of the vaults outside the range.
+</Steps>
 
-4. **Rebalancing Promotion**: If the redeem operation would cause some vaults to be outside the acceptable weight deviation, the function checks that the resulting weights would be closer to the ideal weights than the current weights. This helps promote the rebalancing of the reserve.
+The `ReserveSafetyManager` contract implements these safety checks and provides the `isMintSafe()` and `isRedeemSafe()` functions, as well as the `checkAndPersistMint()` and `checkAndPersistRedeem()` functions.
 
-If all these checks pass, the `isRedeemSafe` function returns an empty string, indicating that the redeem operation is safe to execute. Otherwise, it returns an error message describing the specific reason why the operation is not safe.
+## Examples
 
-## Persistent Safety Checks
+Let's consider a few examples of how the `ISafetyCheck` interface and the `ReserveSafetyManager` contract work:
 
-The `checkAndPersistMint` and `checkAndPersistRedeem` functions are called when an actual mint or redeem operation is performed. These functions simply call the corresponding `isMintSafe` and `isRedeemSafe` functions, and revert the transaction if the operation is deemed unsafe.
+1. **Mint Operation**: Suppose a user wants to mint some Gyro Dollars (GYD) by depositing a mix of tokens into the reserve. The `isMintSafe()` function will first build the `DataTypes.Metadata` struct, then check that all token prices are sufficiently large and that the resulting vault weights are either within the acceptable range or promote rebalancing. If these checks pass, the function will return an empty string, indicating that the mint operation is safe to execute.
 
-By persisting the safety checks, the Gyroscope protocol can ensure that the reserve's state is consistently maintained and that any changes to the system are thoroughly vetted before being applied.
+2. **Redeem Operation**: When a user wants to redeem some GYD tokens, the `isRedeemSafe()` function will first check that the user is not trying to redeem more than the reserve can accommodate. It will then build the `DataTypes.Metadata` struct and perform the same checks as for the mint operation. If all checks pass, the function will return an empty string, indicating that the redeem operation is safe to execute.
 
-<Callout type="note">
-The specific implementation details of the `ReserveSafetyManager` contract, which implements the `ISafetyCheck` interface, are not covered in this section. For more information, please refer to the contract's source code and documentation.
-</Callout>
+3. **Off-Peg Stablecoins**: If the safety checks detect that a vault contains a stablecoin that is significantly off its peg, the `isMintSafe()` function will return an error message unless the operation promotes rebalancing of that vault (i.e., the resulting weight of the vault is lower than the current weight). This is to ensure that the protocol does not allow minting in a way that could exacerbate the off-peg situation.
 
-In summary, the `ISafetyCheck` interface is a crucial component of the Gyroscope protocol, responsible for safeguarding the overall health and stability of the system by thoroughly validating minting and redemption operations before allowing them to proceed.
+By implementing these comprehensive safety checks, the Gyroscope protocol can ensure that mint and redeem operations do not introduce unacceptable risks to the system, even in the presence of volatile or misbehaving assets.

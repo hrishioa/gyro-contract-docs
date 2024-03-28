@@ -2,76 +2,49 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Redemption Flow
 
-The redemption flow in the Gyroscope protocol describes the sequence of interactions that occur when a user wants to redeem their Gyro Dollars (GYD) tokens for the underlying assets. This process involves several key components of the protocol, including the [PAMM](/core-contracts/pamm), [IReserve](/core-contracts/ireserve), and [IMotherboard](/core-contracts/imotherboard) contracts.
+The redemption flow in the Gyroscope protocol is the process by which users can convert their Gyro Dollars (GYD) tokens back into the underlying assets deposited into the Gyroscope reserve. This flow is orchestrated by the **IMotherboard** contract, which serves as the central coordinator for the various components of the Gyroscope protocol.
 
-## Overview of the Redemption Process
+## Steps to Redeem GYD
 
-The redemption process in Gyroscope allows users to exchange their GYD tokens for the underlying assets held in the protocol's reserve. This reserve is composed of various vaults, each of which holds a specific set of tokens. When a user initiates a redemption, the protocol calculates the appropriate amount of each token that the user should receive, based on the current state of the reserve and the [PAMM](/core-contracts/pamm) pricing mechanism.
+<Steps>
+### Step 1: Initiate Redemption
+
+The user calls the `redeem` function on the **IMotherboard** contract, providing the amount of GYD tokens they wish to redeem and the target assets they want to receive. The **IMotherboard** contract then performs a series of checks and validations to ensure the redemption request is safe and feasible.
+
+### Step 2: Safety Checks
+
+The **IMotherboard** contract delegates the safety checks to the **ISafetyCheck** contract, which examines the current state of the Gyroscope reserve and ensures that the redemption request will not unbalance the protocol or cause any other issues. This includes verifying that the requested redemption amount does not exceed the available liquidity in the reserve, and that the resulting weights of the vaults will remain within acceptable ranges.
 
 <Callout type="info">
-The [PAMM](/core-contracts/pamm) (Primary Automated Market Maker) is the core pricing contract in the Gyroscope protocol, responsible for determining the redemption values.
+The **ISafetyCheck** contract performs a series of checks, including verifying that the requested redemption amount can be satisfied by the current reserve balances, and that the resulting weights of the vaults will not deviate too far from their target weights.
 </Callout>
 
-The overall redemption flow can be summarized as follows:
+### Step 3: Redemption Calculation
 
-1. The user initiates a redemption request through the [IMotherboard](/core-contracts/imotherboard) contract, specifying the amount of GYD they wish to redeem.
-2. The [IMotherboard](/core-contracts/imotherboard) contract calls the [redeem()](/core-contracts/pamm#redeem) function on the [PAMM](/core-contracts/pamm) contract, passing in the user's redemption request.
-3. The [PAMM](/core-contracts/pamm) contract calculates the appropriate redemption amount for the user, based on the current state of the reserve and the [PAMM](/core-contracts/pamm) pricing model.
-4. The [PAMM](/core-contracts/pamm) contract records the updated redemption level and last redemption block, and returns the calculated redemption amount to the [IMotherboard](/core-contracts/imotherboard) contract.
-5. The [IMotherboard](/core-contracts/imotherboard) contract then withdraws the appropriate assets from the [IReserve](/core-contracts/ireserve) contract and transfers them to the user.
+If the safety checks pass, the **IMotherboard** contract then calls the `redeem` function on the **IPAMM** contract, which is responsible for calculating the amount of underlying assets the user should receive in exchange for their GYD tokens. This calculation is performed based on the current state of the Gyroscope reserve and the system parameters defined in the **PAMM** contract.
+
+### Step 4: Asset Withdrawal
+
+Once the redemption amount has been calculated, the **IMotherboard** contract withdraws the necessary assets from the **IReserve** contract and transfers them to the user. The user then receives the requested underlying assets in exchange for their GYD tokens.
+</Steps>
+
+The redemption flow can be visualized using the following mermaid diagram:
 
 ```mermaid
 sequenceDiagram
     participant User
     participant IMotherboard
-    participant PAMM
+    participant ISafetyCheck
+    participant IPAMM
     participant IReserve
 
-    User->>IMotherboard: Initiate redemption request
-    IMotherboard->>PAMM: Call redeem()
-    PAMM->>PAMM: Calculate redemption amount
-    PAMM->>IMotherboard: Return calculated redemption amount
-    IMotherboard->>IReserve: Withdraw assets from reserve
-    IMotherboard->>User: Transfer redeemed assets
+    User->>IMotherboard: redeem(gydAmount, assets)
+    IMotherboard->>ISafetyCheck: checkAndPersistRedeem(order)
+    ISafetyCheck->>IMotherboard: check passed
+    IMotherboard->>IPAMM: redeem(gydAmount, reserveUSDValue)
+    IPAMM->>IMotherboard: redeemAmount
+    IMotherboard->>IReserve: withdrawToken(token, redeemAmount)
+    IReserve->>User: transfer underlying assets
 ```
 
-<Callout type="info">
-The [ISafetyCheck](/core-contracts/isafety-check) contract is also involved in the redemption process, ensuring that the operation is safe and does not violate any protocol constraints.
-</Callout>
-
-## Detailed Redemption Flow
-
-Let's dive into the detailed steps of the redemption flow:
-
-<Steps>
-### Step 1: User Initiates Redemption Request
-
-The user interacts with the [IMotherboard](/core-contracts/imotherboard) contract to initiate a redemption request. They specify the amount of GYD they wish to redeem, as well as the output tokens they would like to receive.
-
-### Step 2: IMotherboard Calls PAMM's redeem()
-
-The [IMotherboard](/core-contracts/imotherboard) contract calls the [redeem()](/core-contracts/pamm#redeem) function on the [PAMM](/core-contracts/pamm) contract, passing in the user's redemption request.
-
-### Step 3: PAMM Calculates Redemption Amount
-
-The [PAMM](/core-contracts/pamm) contract calculates the appropriate redemption amount for the user, based on the current state of the reserve and the [PAMM](/core-contracts/pamm) pricing model. This involves the following steps:
-
-1. The [PAMM](/core-contracts/pamm) contract retrieves the current state of the reserve, including the redemption level, reserve value, and total Gyro Dollar supply, by calling the [computeStartingRedeemState()](/core-contracts/pamm#computeStartingRedeemState) function.
-2. The [PAMM](/core-contracts/pamm) contract then calls the [computeRedeemAmount()](/core-contracts/pamm#computeRedeemAmount) function, passing in the current reserve state and the user's requested redemption amount. This function calculates the appropriate redemption amount, taking into account the [PAMM](/core-contracts/pamm) pricing model and any constraints on the redemption process.
-
-### Step 4: PAMM Updates Redemption State
-
-After calculating the redemption amount, the [PAMM](/core-contracts/pamm) contract updates the redemption level and last redemption block, and returns the calculated redemption amount to the [IMotherboard](/core-contracts/imotherboard) contract.
-
-### Step 5: IMotherboard Withdraws Assets from IReserve
-
-The [IMotherboard](/core-contracts/imotherboard) contract then withdraws the appropriate assets from the [IReserve](/core-contracts/ireserve) contract, based on the redemption amount calculated by the [PAMM](/core-contracts/pamm) contract.
-
-### Step 6: IMotherboard Transfers Assets to User
-
-Finally, the [IMotherboard](/core-contracts/imotherboard) contract transfers the redeemed assets to the user, completing the redemption process.
-</Steps>
-
-The redemption flow ensures that users can efficiently redeem their GYD tokens for the underlying assets held in the Gyroscope reserve, while maintaining the integrity of the protocol's pricing mechanisms and reserve management.
-
-For more information on the [PAMM](/core-contracts/pamm) contract and its pricing model, refer to the [PAMM section](/core-contracts/pamm). For details on the [IReserve](/core-contracts/ireserve) and [IMotherboard](/core-contracts/imotherboard) contracts, please consult their respective sections.
+The redemption flow ensures that the Gyroscope protocol maintains a healthy and balanced state, even as users redeem their GYD tokens for the underlying assets. By integrating the **PAMM**, **ISafetyCheck**, and **IReserve** contracts, the **IMotherboard** contract is able to manage the redemption process in a secure and efficient manner.

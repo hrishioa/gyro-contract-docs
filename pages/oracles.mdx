@@ -2,48 +2,40 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Oracles
 
-The Gyroscope protocol relies on a robust set of oracles to provide accurate and up-to-date pricing information for the various assets involved in the system. These oracles are crucial for ensuring the stability and fairness of the protocol's operations, such as minting, redemption, and swaps.
-
-In the Gyroscope protocol, there are three main types of oracles:
-
-1. **USD Price Oracle**: Provides the current USD price for a given asset.
-2. **Relative Price Oracle**: Provides the relative price between two assets.
-3. **Batch Price Oracle**: Provides the USD prices for a batch of assets.
-
-These oracles are integrated into the core contracts of the Gyroscope protocol, such as the [PrimaryAMMV1](/core-contracts/pamm) and the [Motherboard](/core-contracts/imotherboard), to ensure that all pricing-related operations are performed using the most accurate and up-to-date information.
-
-<Callout type="info">
-The individual oracle contracts, such as [CheckedPriceOracle](/oracles/checked-price-oracle), [IUSDPriceOracle](/oracles/iusd-price-oracle), and [IRelativePriceOracle](/oracles/irelative-price-oracle), will be covered in separate subsections later in this document.
-</Callout>
+The Gyroscope protocol relies on various oracle contracts to fetch and verify the prices of assets used in the minting and redemption processes. These oracles provide crucial price information that ensures the protocol's stability and fairness.
 
 ## Oracle Integration
 
-The Gyroscope protocol integrates the various oracles through the [IGyroConfig](/core-contracts/igyro-config) contract, which serves as the central point of configuration for the entire system. This design allows the protocol to easily update or replace the oracle contracts as needed, without having to modify the core functionality of the system.
+The Gyroscope protocol integrates with multiple oracle sources to retrieve asset prices. This multi-oracle approach helps mitigate risks associated with relying on a single source of price data. The protocol uses the following key oracle interfaces:
 
-The [Motherboard](/core-contracts/imotherboard) contract is responsible for interfacing with the oracles and providing the necessary pricing information to other components of the Gyroscope protocol. This centralized approach ensures that all pricing-related operations are performed consistently and reliably across the system.
+- **IUSDPriceOracle**: Provides the USD price of a given asset.
+- **IRelativePriceOracle**: Provides the relative price between a pair of assets.
+- **CheckedPriceOracle**: A wrapper around the USD and relative price oracles, performing additional checks to ensure the prices are accurate and consistent.
 
-<Callout type="warning">
-It's important to note that the reliability and accuracy of the Gyroscope protocol's operations are heavily dependent on the quality and integrity of the underlying oracles. The protocol's designers have taken steps to mitigate the risks associated with oracle failure or manipulation, but users should still be aware of the potential risks involved.
+The oracle integration is designed to be flexible, allowing the protocol to easily switch out or add new oracle sources as needed. This helps the protocol adapt to changes in the DeFi ecosystem and maintain the integrity of its price feeds.
+
+<Callout type="info">
+The Gyroscope protocol's use of multiple oracle sources and extensive price validation helps ensure the stability and reliability of its minting and redemption processes.
 </Callout>
 
-## Oracle Monitoring and Failsafes
+The overall flow of the oracle integration can be visualized as follows:
 
-To further enhance the security and reliability of the Gyroscope protocol, the system includes a dedicated [OracleGuardian](/core-contracts/oracle-guardian) contract. This contract is responsible for continuously monitoring the performance and behavior of the various oracles used by the system.
+```mermaid
+graph LR
+    A[Asset Prices] --> B[IUSDPriceOracle]
+    B --> C[IRelativePriceOracle]
+    C --> D[CheckedPriceOracle]
+    D --> E[Gyroscope Protocol]
+```
 
-The OracleGuardian contract employs a set of predefined safety checks and thresholds to detect any anomalies or potential issues with the oracles. If the OracleGuardian detects a problem, it can temporarily disable or quarantine the affected oracle, allowing the protocol to continue operating safely until the issue is resolved.
+The `CheckedPriceOracle` contract acts as the primary interface for the protocol, consolidating the price information from the underlying oracles and performing additional checks to ensure the prices are accurate and consistent.
 
-<Steps>
-### Step 1
-The OracleGuardian contract periodically checks the following metrics for each oracle:
-- Price deviations from expected values
-- Sudden changes in price volatility
-- Lack of price updates within a specified time frame
+<Callout type="warning">
+The Gyroscope protocol's reliance on oracle data means it is important to carefully monitor the health and reliability of the oracle sources. Sudden changes or inaccuracies in the oracle prices could potentially impact the stability of the protocol.
+</Callout>
 
-### Step 2
-If any of these metrics exceed the predefined thresholds, the OracleGuardian can take the following actions:
-- Temporarily disable the affected oracle
-- Trigger an emergency shutdown of the protocol's operations
-- Notify the Gyroscope governance community to investigate and resolve the issue
-</Steps>
+In the following sections, we will explore the key oracle contracts used in the Gyroscope protocol in more detail.
 
-By implementing this robust oracle monitoring and failsafe system, the Gyroscope protocol aims to ensure the continued stability and reliability of the system, even in the face of potential oracle failures or manipulation attempts.
+[CheckedPriceOracle](/oracles/checked-price-oracle)
+[IUSDPriceOracle](/oracles/iusd-price-oracle)
+[IRelativePriceOracle](/oracles/irelative-price-oracle)

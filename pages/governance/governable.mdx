@@ -2,40 +2,34 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Governable
 
-The `Governable` contract is the base contract that provides the functionality for governor management in the Gyroscope protocol. It is a key component of the protocol's governance system, which allows the community to make important decisions and updates to the system.
-
-The `Governable` contract is responsible for the following:
-
-- Storing the address of the current governor
-- Allowing the current governor to change the governor
-- Emitting events when the governor is changed
+The `Governable` contract is a base contract that provides functionality for managing a governor address, which is responsible for making administrative decisions for the Gyroscope protocol. This contract is used as a building block for other contracts in the Gyroscope ecosystem, ensuring consistent governance mechanisms across the protocol.
 
 ## Governor Management
 
-The governor of the Gyroscope protocol is the entity that has the authority to make important decisions and updates to the system. This could be a multi-sig wallet, a DAO, or any other appropriate governance structure.
+The `Governable` contract allows for the management of the governor address through two key functions:
 
-The `Governable` contract provides the following functionality for managing the governor:
+1. **Changing the Governor**: The `changeGovernor` function allows the current governor to update the governor address to a new one. This is an important governance function, as the governor is responsible for making critical decisions that impact the protocol.
 
-### Changing the Governor
+2. **Accepting Governance**: The `acceptGovernance` function allows a pending governor to officially take over the governor role. This two-step process (changing and accepting) helps ensure a smooth transition of governance responsibilities.
 
-The current governor can change the governor by calling the `changeGovernor` function. This function takes the address of the new governor as a parameter and emits a `GovernorChangeRequested` event.
+These functions are protected by the `governanceOnly` modifier, which restricts their access to only the current governor.
 
 <Callout type="info">
-  The new governor must accept the governance by calling the `acceptGovernance`
-  function before the change takes effect.
+The initial governor is set during the `Governable` contract's construction, and subsequent changes are made through the `changeGovernor` and `acceptGovernance` functions.
 </Callout>
 
-### Accepting Governance
+## Events
 
-The new governor can accept the governance by calling the `acceptGovernance` function. This function transfers the governance to the new governor and emits a `GovernorChanged` event.
+The `Governable` contract emits two events to keep track of governor changes:
 
-### Checking the Governor
+1. **GovernorChanged**: This event is emitted whenever the governor is changed, and it includes the old and new governor addresses.
+2. **GovernorChangeRequested**: This event is emitted whenever a governor change is requested, and it includes the proposed new governor address.
 
-The current governor can be retrieved by calling the `governor` function, and the pending governor can be retrieved by calling the `pendingGovernor` function.
+These events can be useful for off-chain monitoring and tracking of governance activities.
 
 ## Example Usage
 
-Here's an example of how the `Governable` contract can be used in the Gyroscope protocol:
+Here's an example of how the `Governable` contract might be used in the context of the Gyroscope protocol:
 
 ```solidity
 // SPDX-License-Identifier: LicenseRef-Gyro-1.0
@@ -44,20 +38,20 @@ pragma solidity ^0.8.4;
 import "Governable.sol";
 
 contract PrimaryAMMV1 is Governable {
-    // ...
-
     constructor(address _governor, /* other parameters */) Governable(_governor) {
-        // ...
+        // Initialize the primary AMM contract with the provided governor address
     }
 
-    function setSystemParams(Params memory params) external governanceOnly {
-        // ...
+    function setSystemParams(/* parameters */) external governanceOnly {
+        // Update the system parameters, which can only be done by the governor
     }
-
-    // ...
 }
 ```
 
-In this example, the `PrimaryAMMV1` contract inherits from the `Governable` contract and uses the `governanceOnly` modifier to ensure that only the governor can call certain functions, such as `setSystemParams`.
+In this example, the `PrimaryAMMV1` contract inherits from `Governable` and uses the governor address to control access to the `setSystemParams` function, which allows the governor to update the system parameters of the primary AMM.
 
-The `Governable` contract provides a solid foundation for managing the governance of the Gyroscope protocol, ensuring that important decisions are made by the authorized entity.
+By using the `Governable` contract as a base, the `PrimaryAMMV1` contract ensures that the governance mechanisms are consistently applied across the Gyroscope protocol, making it easier to maintain and update the governance rules over time.
+
+## Conclusion
+
+The `Governable` contract provides a standardized way to manage the governor address in the Gyroscope protocol. By encapsulating governor management in a reusable contract, the protocol can ensure consistent governance across its various components, making it easier to evolve and adapt the protocol's governance over time.

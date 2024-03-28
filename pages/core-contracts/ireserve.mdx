@@ -2,57 +2,54 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # IReserve
 
-The `IReserve` interface is responsible for managing the token deposits and withdrawals in the Gyroscope protocol. This contract serves as the central repository for all the tokens that are part of the Gyroscope reserve.
+The `IReserve` contract is the interface for the Gyroscope protocol's reserve, which manages the depositing and withdrawing of tokens. This is a critical component of the protocol, as it is responsible for holding the underlying assets that back the Gyro stablecoin.
 
-The key features of the `IReserve` contract include:
+The `IReserve` interface defines the following key functionalities:
 
-1. **Deposit and Withdraw Tokens**: The contract allows authorized managers to deposit and withdraw tokens from the reserve. This is an essential functionality as it enables the minting and redemption of Gyro Dollars (GYD) by interacting with the vaults.
-
-2. **Manage Authorized Managers**: The contract maintains a list of authorized managers who are allowed to interact with the reserve. This access control mechanism ensures that only trusted entities can deposit and withdraw tokens.
-
-3. **Emit Events**: The contract emits events whenever tokens are deposited or withdrawn, as well as when managers are added or removed. This provides transparency and allows other components of the Gyroscope protocol to track changes to the reserve.
-
-Let's dive into the key functions and events of the `IReserve` interface:
-
-## Functions
-
-### `managers()`
-This function returns the list of authorized managers who can deposit and withdraw tokens from the reserve.
+## Deposit and Withdraw Tokens
+The reserve allows authorized accounts, known as _managers_, to deposit and withdraw tokens from the reserve. This is done through the `depositToken` and `withdrawToken` functions.
 
 <Callout type="info">
-The authorized managers are expected to be trusted entities, such as the Motherboard contract, that are responsible for minting and redeeming Gyro Dollars (GYD).
+The reserve only allows deposits and withdrawals from authorized managers to ensure the integrity of the reserve's holdings.
 </Callout>
 
-### `addManager(address manager)`
-This function adds a new manager to the list of authorized managers. Only the current managers can call this function.
+## Manager Management
+The `IReserve` contract allows adding and removing reserve managers through the `addManager` and `removeManager` functions. Only the current managers are allowed to perform these operations.
 
-### `removeManager(address manager)`
-This function removes a manager from the list of authorized managers. Only the current managers can call this function.
-
-### `depositToken(address token, uint256 amount)`
-This function allows an authorized manager to deposit a specified amount of a token into the reserve.
-
-<Callout type="info">
-The tokens deposited into the reserve are used to back the Gyro Dollars (GYD) during the minting process. The reserve serves as the primary source of liquidity for the protocol.
-</Callout>
-
-### `withdrawToken(address token, uint256 amount)`
-This function allows an authorized manager to withdraw a specified amount of a token from the reserve. This is typically done during the redemption process, where Gyro Dollars (GYD) are burned in exchange for the underlying tokens.
+```mermaid
+sequenceDiagram
+    participant Manager
+    participant Reserve
+    Manager->>Reserve: addManager(newManager)
+    Reserve->>Reserve: Add newManager to managers
+    Reserve-->>Manager: Success
+```
 
 ## Events
+The `IReserve` contract emits the following events:
 
-### `ManagerAdded(address indexed manager)`
-This event is emitted whenever a new manager is added to the reserve.
+- `Deposit`: Emitted when tokens are deposited into the reserve.
+- `Withdraw`: Emitted when tokens are withdrawn from the reserve.
+- `ManagerAdded`: Emitted when a new manager is added.
+- `ManagerRemoved`: Emitted when a manager is removed.
 
-### `ManagerRemoved(address indexed manager)`
-This event is emitted whenever a manager is removed from the reserve.
+These events allow external systems to track the activities and changes happening within the reserve.
 
-### `Deposit(address indexed from, address indexed token, uint256 amount)`
-This event is emitted whenever a token is deposited into the reserve.
+## Example Usage
+Here's an example of how the `IReserve` contract might be used in the Gyroscope protocol:
 
-### `Withdraw(address indexed from, address indexed token, uint256 amount)`
-This event is emitted whenever a token is withdrawn from the reserve.
+<Steps>
+### Step 1
+A Gyroscope user requests to mint some Gyro tokens. The Motherboard contract calls the `mint` function on the `IReserve` contract to deposit the necessary tokens into the reserve.
 
-The `IReserve` contract plays a crucial role in the Gyroscope protocol, serving as the central repository for all the tokens that back the Gyro Dollars (GYD). By managing the authorized managers and providing deposit and withdrawal functionalities, the `IReserve` ensures the integrity and liquidity of the Gyroscope ecosystem.
+### Step 2
+The Motherboard contract calls the `depositToken` function on the `IReserve` contract, passing the token address and the amount to be deposited. The `IReserve` contract ensures that the caller is an authorized manager and then updates the reserve's holdings accordingly.
 
-For more information on how the `IReserve` interacts with other components of the Gyroscope protocol, please refer to the [Minting Flow](/architecture-interactions/minting-flow) and [Redemption Flow](/architecture-interactions/redemption-flow) sections.
+### Step 3
+When a user requests to redeem Gyro tokens, the Motherboard contract calls the `redeem` function on the `IReserve` contract to withdraw the corresponding underlying tokens from the reserve.
+
+### Step 4
+The Motherboard contract calls the `withdrawToken` function on the `IReserve` contract, passing the token address and the amount to be withdrawn. The `IReserve` contract ensures that the caller is an authorized manager and then updates the reserve's holdings accordingly.
+</Steps>
+
+The `IReserve` contract is a crucial part of the Gyroscope protocol, ensuring the secure management of the underlying assets that back the Gyro stablecoin. Its well-defined interface and events provide a standardized way for other Gyroscope components to interact with the reserve.

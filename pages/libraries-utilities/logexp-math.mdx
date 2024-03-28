@@ -2,60 +2,57 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # LogExpMath
 
-The **LogExpMath** library provides a set of mathematical functions that use logarithms and exponentiation to perform various computations. This library is crucial for the Gyroscope protocol, as it is used in the [PAMM](/core-contracts/pamm) contract to calculate the reserve's value and the amount of GYD to mint or redeem.
+The `LogExpMath` library provides a set of mathematical functions that utilize logarithms and exponentiation. These functions are essential for the Gyroscope protocol's primary AMM pricing mechanism, which relies on complex mathematical calculations.
 
-## Logarithmic Functions
+## Logarithmic and Exponential Functions
 
-The library provides two main logarithmic functions:
+The library includes several functions that perform logarithmic and exponential operations:
 
-1. **`log`**: This function calculates the natural logarithm of a given number. It is used to compute various intermediate values in the PAMM's pricing algorithm.
+- `log(uint256 x)`: Calculates the natural logarithm of `x`.
+- `exp(uint256 x)`: Calculates the exponential function of `x`.
+- `intPowDown(uint256 base, uint256 exponent)`: Calculates the integer power of `base` raised to the `exponent`, rounding down the result.
 
-2. **`exp`**: This function calculates the exponential of a given number. It is used to undo the logarithmic transformations and obtain the final results.
-
-These logarithmic functions are particularly useful when working with large numbers, as they help to avoid numerical overflow and underflow issues.
+These functions are used extensively throughout the Gyroscope protocol, particularly in the [PAMM contract](/core-contracts/pamm) for computing various pricing parameters.
 
 <Callout type="info">
-The logarithmic functions in this library are implemented using a Taylor series expansion, which provides a good balance between accuracy and gas efficiency.
+The logarithmic and exponential functions in `LogExpMath` are designed to work with fixed-point decimal numbers, which are represented using the [FixedPoint library](/libraries-utilities/fixed-point). This allows for precise calculations while avoiding the potential for overflow and underflow errors.
 </Callout>
 
-## Fixed-Point Arithmetic
+## Example Usage
 
-In addition to the logarithmic functions, the **LogExpMath** library also provides support for fixed-point arithmetic. This is important because the Gyroscope protocol deals with values that need to be represented with high precision, such as token prices and balances.
+Let's look at an example of how the `LogExpMath` functions can be used in the context of the Gyroscope protocol:
 
-The library defines the `FixedPoint` struct, which represents a fixed-point number with 18 decimal places. The `FixedPoint` struct provides the following operations:
-
-- **Addition** and **Subtraction**
-- **Multiplication** and **Division**
-- **Exponentiation**
-- **Comparison** (greater than, less than, equal to)
-
-These fixed-point arithmetic operations are heavily used throughout the Gyroscope protocol, including in the [PAMM](/core-contracts/pamm) contract, to ensure that calculations are performed with the required precision.
-
-<Callout type="warning">
-It is crucial to use the fixed-point arithmetic operations provided by the `FixedPoint` struct, as direct use of Solidity's built-in arithmetic operators can lead to unintended rounding errors and incorrect results.
-</Callout>
-
-## Examples
-
-Here's an example of how the `log` and `exp` functions can be used in the context of the Gyroscope protocol:
+<Steps>
+### Step 1
+In the `computeAlpha` function of the `PrimaryAMMV1` contract, we need to calculate the value of `alpha`, which is a key parameter in the pricing mechanism. The formula for `alpha` involves logarithmic and exponential operations:
 
 ```solidity
-uint256 x = 1e18; // A value of 1 (18 decimal places)
-uint256 logX = LogExpMath.log(x); // Compute the natural logarithm of 1, which is 0
-uint256 expLogX = LogExpMath.exp(logX); // Compute the exponential of 0, which is 1 (18 decimal places)
+function computeAlpha(
+    uint256 ba,
+    uint256 ya,
+    uint256 thetaBar,
+    uint256 alphaBar
+) internal pure returns (uint256) {
+    uint256 ra = ba.divDown(ya);
+    uint256 alphaMin = alphaBar.divDown(ya);
+    uint256 alphaHat;
+    if (ra >= (ONE + thetaBar) / 2) {
+        alphaHat = TWO.mulDown(ONE - ra).divDown(ya);
+    } else {
+        uint256 numerator = (ONE - thetaBar)**2;
+        uint256 denominator = ba - thetaBar.mulDown(ya);
+        alphaHat = numerator / (denominator * 2);
+    }
+    return alphaHat.max(alphaMin);
+}
 ```
 
-In this example, we first define a value `x` with 18 decimal places, representing the value 1. We then use the `log` function to compute the natural logarithm of `x`, which is 0. Finally, we use the `exp` function to compute the exponential of 0, which should result in the original value of 1 (with 18 decimal places).
+### Step 2
+In this example, we use the `LogExpMath` functions to calculate the values of `ra`, `alphaMin`, and `alphaHat`. The `divDown` and `mulDown` functions from the `FixedPoint` library are used to perform the necessary fixed-point arithmetic operations.
 
-The fixed-point arithmetic operations can be used as follows:
+The `exp` function is used to calculate `(ONE - thetaBar)**2`, and the `log` function is used to compute `ra = ba.divDown(ya)`. These values are then used in the subsequent calculations to determine the final value of `alpha`.
 
-```solidity
-uint256 a = 1e18; // 1
-uint256 b = 2e18; // 2
-uint256 c = FixedPoint.mulDown(a, b); // 2 (18 decimal places)
-uint256 d = FixedPoint.divDown(b, a); // 2 (18 decimal places)
-```
+By utilizing the logarithmic and exponential functions provided by the `LogExpMath` library, the Gyroscope protocol can accurately and efficiently perform the complex mathematical operations required for its pricing mechanism.
+</Steps>
 
-In this example, we define two fixed-point values `a` and `b`, representing 1 and 2, respectively. We then use the `mulDown` and `divDown` functions to perform multiplication and division, respectively. The results are also fixed-point values with 18 decimal places.
-
-Remember, the **LogExpMath** library is a crucial component of the Gyroscope protocol, as it provides the necessary mathematical functions and fixed-point arithmetic to ensure the correct calculation of token prices, balances, and other important protocol metrics.
+The `LogExpMath` library is a crucial component of the Gyroscope protocol, enabling the precise calculation of parameters that are essential for the protocol's overall functionality and performance.

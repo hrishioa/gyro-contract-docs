@@ -2,67 +2,90 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # ConfigHelpers
 
-The `ConfigHelpers` library provides a set of helper functions for interacting with the Gyroscope configuration stored in the `IGyroConfig` contract. This contract serves as the central repository for all global configuration settings used throughout the Gyroscope protocol.
+This library provides helper functions for interacting with the Gyroscope configuration contract, `IGyroConfig`. The `IGyroConfig` contract is the central hub for storing and managing global configuration settings used throughout the Gyroscope protocol.
 
-The `ConfigHelpers` library is designed to simplify the process of retrieving, setting, and updating configuration values, making it easier for developers to work with the Gyroscope protocol's configuration system.
+The `ConfigHelpers` library makes it easier to read and update these configuration values by providing a set of utility functions. This helps ensure consistency and reduces boilerplate code when working with the global configuration.
 
-## Retrieving Configuration Values
+## Reading Configuration Values
 
-The `ConfigHelpers` library provides several functions for retrieving configuration values from the `IGyroConfig` contract:
+The `IGyroConfig` interface provides various methods for fetching configuration values, such as `getUint()`, `getAddress()`, and `getConfigMeta()`. The `ConfigHelpers` library wraps these methods to provide a more convenient API.
 
-- `getUint(bytes32 key)`: Retrieves the `uint256` value associated with the specified `key`.
-- `getUint(bytes32 key, uint256 defaultValue)`: Retrieves the `uint256` value associated with the specified `key`, or the provided `defaultValue` if the key is not found.
-- `getAddress(bytes32 key)`: Retrieves the `address` value associated with the specified `key`.
-- `getAddress(bytes32 key, address defaultValue)`: Retrieves the `address` value associated with the specified `key`, or the provided `defaultValue` if the key is not found.
-
-Here's an example of how you might use these functions:
+For example, to fetch the current value of the `alphaBar` parameter, you can use the following code:
 
 ```solidity
-bytes32 key = keccak256(abi.encodePacked("PAMM_ALPHA_BAR"));
-uint256 alphaBar = ConfigHelpers.getUint(key);
+uint256 alphaBar = ConfigHelpers.getUint(keccak256("alphaBar"));
 ```
 
-In this example, we're retrieving the value associated with the `"PAMM_ALPHA_BAR"` configuration key, which is likely the alpha bar parameter used in the PAMM (Primary AMM) contract.
+Here, we're using the `getUint()` helper function to fetch the value associated with the `"alphaBar"` key in the configuration contract.
 
 <Callout type="info">
-The `ConfigHelpers` library uses the `keccak256` hash function to convert a human-readable configuration key into the corresponding `bytes32` value used by the `IGyroConfig` contract. This ensures that the keys are standardized and consistent throughout the protocol.
+The configuration keys are hashed using the `keccak256()` function to generate a unique 32-byte identifier. This helps ensure that the keys are unique and can be looked up efficiently in the contract's storage.
 </Callout>
 
-## Setting Configuration Values
-
-The `ConfigHelpers` library also provides functions for setting configuration values in the `IGyroConfig` contract:
-
-- `setUint(bytes32 key, uint256 newValue)`: Sets the `uint256` value associated with the specified `key` to the provided `newValue`.
-- `setAddress(bytes32 key, address newValue)`: Sets the `address` value associated with the specified `key` to the provided `newValue`.
-
-Here's an example of how you might use these functions:
+Similarly, you can use the `getAddress()` helper to fetch the value of an address-typed configuration parameter:
 
 ```solidity
-bytes32 key = keccak256(abi.encodePacked("PAMM_ALPHA_BAR"));
-ConfigHelpers.setUint(key, 0.5e18);
+address motherboard = ConfigHelpers.getAddress(keccak256("motherboard"));
 ```
 
-In this example, we're setting the `"PAMM_ALPHA_BAR"` configuration key to the value of `0.5e18`, which is likely the new alpha bar parameter for the PAMM contract.
+The `getConfigMeta()` helper function can be used to retrieve additional metadata about a configuration parameter, such as whether it is frozen or what its data type is:
 
-<Callout type="warning">
-Configuration changes in the `IGyroConfig` contract are typically governed by the Gyroscope protocol's governance system. Developers should ensure that they have the necessary permissions and approvals before attempting to update configuration values.
-</Callout>
+```solidity
+(uint8 dataType, bool isFrozen) = ConfigHelpers.getConfigMeta(keccak256("alphaBar"));
+```
 
-## Unset and Freeze Configuration Keys
+## Updating Configuration Values
 
-The `ConfigHelpers` library also provides functions for unset and freeze configuration keys in the `IGyroConfig` contract:
+In addition to reading configuration values, the `ConfigHelpers` library also provides functions for updating them. This is particularly useful when implementing governance-controlled features, where protocol parameters need to be changed over time.
 
-- `unset(bytes32 key)`: Removes the configuration value associated with the specified `key`.
-- `freeze(bytes32 key)`: Freezes the configuration value associated with the specified `key`, making it impossible to update or unset the value.
+<Steps>
+### Step 1
 
-These functions can be useful for managing the protocol's configuration over time, such as when certain configuration values become obsolete or need to be permanently locked.
+To update the value of a configuration parameter, you can use the `setUint()` or `setAddress()` helper functions:
 
-<Callout type="info">
-Unset and freeze operations on configuration keys are also typically governed by the Gyroscope protocol's governance system. Developers should ensure that they have the necessary permissions and approvals before attempting to unset or freeze configuration keys.
-</Callout>
+```solidity
+ConfigHelpers.setUint(keccak256("alphaBar"), newAlphaBarValue);
+```
 
-## Conclusion
+### Step 2
 
-The `ConfigHelpers` library provides a convenient and standardized way for developers to interact with the Gyroscope protocol's configuration system. By abstracting away the low-level details of the `IGyroConfig` contract, the `ConfigHelpers` library helps to simplify the process of managing configuration values, making it easier to build applications and services on top of the Gyroscope protocol.
+If you need to remove a configuration parameter, you can use the `unset()` helper:
 
-For more information on the Gyroscope protocol's architecture and other core components, be sure to check out the [Architecture and Interactions](/architecture-interactions) and [Core Contracts](/core-contracts) sections of this documentation.
+```solidity
+ConfigHelpers.unset(keccak256("alphaBar"));
+```
+
+### Step 3
+
+Finally, if a configuration parameter needs to be permanently locked, you can use the `freeze()` helper to prevent it from being updated or unset in the future:
+
+```solidity
+ConfigHelpers.freeze(keccak256("alphaBar"));
+```
+</Steps>
+
+By using the `ConfigHelpers` library, you can simplify the process of managing the Gyroscope protocol's global configuration, making it easier to maintain and evolve the system over time.
+
+## Example: Updating the Motherboard Address
+
+Let's consider an example of how you might use the `ConfigHelpers` library to update the address of the Gyroscope Motherboard contract.
+
+The Motherboard contract is the central hub that coordinates the various components of the Gyroscope protocol. It's important that this address can be updated as needed, such as when a new Motherboard contract is deployed.
+
+Here's how you might update the Motherboard address using the `ConfigHelpers` library:
+
+```solidity
+// Get the current Motherboard address
+address currentMotherboardAddress = ConfigHelpers.getAddress(keccak256("motherboard"));
+
+// Update the Motherboard address to a new value
+ConfigHelpers.setAddress(keccak256("motherboard"), newMotherboardAddress);
+
+// Verify that the update was successful
+address updatedMotherboardAddress = ConfigHelpers.getAddress(keccak256("motherboard"));
+require(updatedMotherboardAddress == newMotherboardAddress, "Motherboard address update failed");
+```
+
+In this example, we first retrieve the current Motherboard address using the `getAddress()` helper. We then update the address using the `setAddress()` helper, passing in the new address we want to use. Finally, we verify that the update was successful by fetching the updated address and comparing it to the new value we set.
+
+By using the `ConfigHelpers` library, we can simplify the process of updating critical protocol parameters like the Motherboard address, making it easier to manage the Gyroscope protocol as it evolves over time.

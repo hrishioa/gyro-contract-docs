@@ -1,64 +1,67 @@
 import { Callout, Steps, Step } from "nextra-theme-docs";
 
-# Fixed Point
+# FixedPoint
 
-The `FixedPoint` library in the Gyroscope protocol provides a set of utilities for working with fixed-point arithmetic. Fixed-point numbers are a way to represent fractional values in a computer program, where the decimal point is assumed to be in a fixed position. This is particularly useful in the context of the Gyroscope protocol, where precise calculations and comparisons of fractional values are crucial for the proper functioning of the primary AMM and other components.
+The `FixedPoint` library provides a set of functions for performing fixed-point arithmetic operations in Solidity. Fixed-point numbers are a way to represent fractional values in a contract, where the decimal point is shifted by a fixed number of bits. This allows for more precise calculations compared to using standard integer types.
 
-The `FixedPoint` library defines a `FixedPoint.Uint256` type, which is a wrapper around the `uint256` type in Solidity. This type provides a set of operations for performing arithmetic on fixed-point numbers, including addition, subtraction, multiplication, and division. The library also includes utility functions for converting between fixed-point and integer representations, and for performing various comparisons and operations on fixed-point values.
+The library supports the following operations:
 
-One of the key features of the `FixedPoint` library is its use of a standardized 18-decimal place representation. This means that all fixed-point values in the Gyroscope protocol are represented using 18 decimal places, making it easy to work with values that represent percentages, fractions, or other fractional quantities.
+- **Addition and Subtraction**: `add`, `sub`, `absSub`
+- **Multiplication and Division**: `mulDown`, `divDown`
+- **Exponentiation**: `intPowDown`
 
-## Fixed-Point Arithmetic Operations
+## Addition and Subtraction
 
-The `FixedPoint` library provides the following arithmetic operations for working with fixed-point numbers:
-
-- **Addition**: The `add` function adds two fixed-point numbers and returns the result.
-- **Subtraction**: The `sub` function subtracts one fixed-point number from another and returns the result.
-- **Multiplication**: The `mul` function multiplies two fixed-point numbers and returns the result.
-- **Division**: The `div` function divides one fixed-point number by another and returns the result.
-
-These operations are essential for performing calculations on the fractional values used throughout the Gyroscope protocol, such as pool weights, token prices, and other key parameters.
-
-<Callout type="info">
-It's important to note that the `FixedPoint` library uses **integer division** for its division operation, which means that the result is always rounded down to the nearest integer. This is a common approach in fixed-point arithmetic to avoid introducing rounding errors.
-</Callout>
-
-## Utility Functions
-
-In addition to the core arithmetic operations, the `FixedPoint` library also provides a number of utility functions for working with fixed-point numbers:
-
-- **Conversion**: The `fromUint256` and `toUint256` functions allow you to convert between fixed-point and integer representations.
-- **Comparison**: The `gt`, `lt`, `eq`, `gte`, and `lte` functions allow you to compare two fixed-point numbers.
-- **Absolute Value**: The `abs` function returns the absolute value of a fixed-point number.
-- **Minimum and Maximum**: The `min` and `max` functions return the minimum or maximum of two fixed-point numbers.
-
-These utility functions make it easier to work with fixed-point values in the context of the Gyroscope protocol, where precise comparisons and conversions are often necessary.
-
-## Example Usage
-
-Here's an example of how the `FixedPoint` library might be used in the Gyroscope protocol:
+The `add` and `sub` functions perform addition and subtraction of fixed-point numbers, respectively. The `absSub` function calculates the absolute difference between two fixed-point numbers.
 
 ```solidity
-import "FixedPoint.sol";
+function add(uint256 a, uint256 b) internal pure returns (uint256) {
+    // ...
+}
 
-contract MyContract {
-    using FixedPoint for uint256;
+function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+    // ...
+}
 
-    function calculateWeightedAverage(uint256 value1, uint256 value2, uint256 weight1, uint256 weight2) public pure returns (uint256) {
-        uint256 weightedValue1 = value1.mulDown(weight1);
-        uint256 weightedValue2 = value2.mulDown(weight2);
-        uint256 totalWeight = weight1.add(weight2);
-        return (weightedValue1.add(weightedValue2)).divDown(totalWeight);
-    }
+function absSub(uint256 a, uint256 b) internal pure returns (uint256) {
+    // ...
 }
 ```
 
-In this example, the `calculateWeightedAverage` function uses the `FixedPoint` library to perform the necessary calculations to compute a weighted average of two values, using the provided weights. The `mulDown` and `divDown` functions are used to ensure that the results are rounded down to the nearest 18-decimal place value, as is typical in the Gyroscope protocol.
+<Callout type="info">
+The `add` and `sub` functions use the standard Solidity `+` and `-` operators, respectively. The `absSub` function calculates the absolute difference between the two numbers by subtracting the smaller value from the larger value.
+</Callout>
 
-By using the `FixedPoint` library, the Gyroscope protocol can ensure that all of its fractional calculations are performed accurately and consistently, helping to maintain the integrity of the protocol's core mechanisms.
+## Multiplication and Division
 
-## Conclusion
+The `mulDown` and `divDown` functions perform fixed-point multiplication and division, respectively. The `mulDown` function rounds the result down to the nearest integer, while the `divDown` function rounds the result down to the nearest integer.
 
-The `FixedPoint` library is a crucial component of the Gyroscope protocol, providing a robust and reliable way to perform fixed-point arithmetic operations. By using a standardized 18-decimal place representation and offering a variety of utility functions, the `FixedPoint` library helps ensure the accuracy and precision of the protocol's calculations, which is essential for the proper functioning of the primary AMM and other key components.
+```solidity
+function mulDown(uint256 a, uint256 b) internal pure returns (uint256) {
+    // ...
+}
 
-For more information on the Gyroscope protocol's architecture and core contracts, be sure to check out the [Architecture and Interactions](/architecture-interactions) and [Core Contracts](/core-contracts) sections of this handbook.
+function divDown(uint256 a, uint256 b) internal pure returns (uint256) {
+    // ...
+}
+```
+
+<Callout type="info">
+The `mulDown` and `divDown` functions use the fixed-point representation to perform the calculations, ensuring that the results are precise and consistent with the expected behavior of fixed-point arithmetic.
+</Callout>
+
+## Exponentiation
+
+The `intPowDown` function calculates the integer power of a fixed-point number, rounding the result down to the nearest integer.
+
+```solidity
+function intPowDown(uint256 a, uint256 n) internal pure returns (uint256) {
+    // ...
+}
+```
+
+<Callout type="info">
+The `intPowDown` function is particularly useful for calculating exponential moving averages and other time-series related calculations in the Gyroscope protocol.
+</Callout>
+
+The `FixedPoint` library is an essential component of the Gyroscope protocol, as it enables precise calculations and risk management within the AMM and other core contracts. By using fixed-point arithmetic, the protocol can ensure that token values and prices are accurately represented and that the overall system remains stable and reliable.

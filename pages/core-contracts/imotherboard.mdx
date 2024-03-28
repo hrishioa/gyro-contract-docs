@@ -2,53 +2,96 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # IMotherboard
 
-The `IMotherboard` is the central contract that connects the different components of the Gyroscope protocol. It acts as the main entry point for users to interact with the protocol, handling the minting and redemption of the Gyro Dollar (GYD) token.
+The **IMotherboard** contract is the central hub that connects the different components of the Gyroscope protocol. It serves as the main interface for users to interact with the protocol, providing functions for minting and redeeming Gyro Dollars (GYD).
 
-The `IMotherboard` contract provides the following key functionalities:
+The IMotherboard interface defines the following key functionalities:
 
-## Minting GYD Tokens
+## Accessing Protocol Components
 
-The `mint` function allows users to deposit various tokens into the protocol and receive GYD tokens in return. This function takes an array of `MintAsset` structs, which specify the input tokens, their amounts, and the destination vaults for the deposits.
+The IMotherboard contract provides getter methods to retrieve the addresses of the core protocol components:
 
-<Callout type="info">
-The `MintAsset` struct contains the following fields:
-- `inputToken`: The address of the input token
-- `inputAmount`: The amount of the input token to deposit
-- `destinationVault`: The address of the vault where the input token should be deposited
-</Callout>
+- `gydToken()`: Returns the address of the GYD token contract.
+- `pamm()`: Returns the address of the Primary AMM (PAMM) contract.
+- `reserve()`: Returns the address of the Reserve contract.
+- `gyroConfig()`: Returns the address of the Gyro Config contract.
 
-The `IMotherboard` contract ensures that the minting process is secure and conforms to the protocol's safety checks by calling the `checkAndPersistMint` function on the `ISafetyCheck` contract.
+This allows other contracts and applications to easily interact with these components without needing to know their specific addresses.
 
-## Redeeming GYD Tokens
+## Minting GYD
 
-The `redeem` function allows users to burn GYD tokens and receive the underlying tokens in return. This function takes an array of `RedeemAsset` structs, which specify the output tokens, the minimum amounts to receive, and the origin vaults from which the tokens should be withdrawn.
+The `mint()` function allows users to mint GYD tokens by providing a list of `DataTypes.MintAsset` structs. Each struct contains the input token address, the input amount, and the destination vault address.
 
 <Callout type="info">
-The `RedeemAsset` struct contains the following fields:
-- `outputToken`: The address of the output token
-- `minOutputAmount`: The minimum amount of the output token to receive
-- `valueRatio`: The ratio of the output token value to the redeemed GYD amount
-- `originVault`: The address of the vault from which the output token should be withdrawn
+The `MintAsset` struct is defined as follows:
+
+```solidity
+struct MintAsset {
+    address inputToken;
+    uint256 inputAmount;
+    address destinationVault;
+}
+```
 </Callout>
 
-Similar to the minting process, the `IMotherboard` contract ensures the safety of the redemption by calling the `checkAndPersistRedeem` function on the `ISafetyCheck` contract.
+The Motherboard contract will then take care of depositing the input tokens into the respective vaults, calculating the amount of GYD to mint, and minting them for the user. The function returns the actual amount of GYD minted.
 
-## Dry-Run Functions
+<Steps>
+### Step 1
+The user calls the `mint()` function on the Motherboard contract, providing an array of `MintAsset` structs.
 
-The `IMotherboard` contract also provides "dry-run" versions of the `mint` and `redeem` functions, namely `dryMint` and `dryRedeem`. These functions simulate the respective operations without actually executing them, returning the expected results and any potential error messages.
+### Step 2
+The Motherboard contract verifies the input data and performs the following steps:
+1. Deposits the input tokens into the specified vaults.
+2. Calculates the amount of GYD to mint based on the PAMM contract's logic.
+3. Mints the GYD tokens and sends them to the user.
 
-This allows users to preview the outcome of a mint or redeem operation before committing to it, helping them make more informed decisions and avoid unexpected outcomes.
+### Step 3
+The Motherboard contract returns the actual amount of GYD minted.
+</Steps>
 
-## Integration with Other Gyroscope Components
+## Redeeming GYD
 
-The `IMotherboard` contract integrates with several other key components of the Gyroscope protocol, including:
+The `redeem()` function allows users to redeem GYD tokens in exchange for the underlying assets. The user provides the amount of GYD to redeem and an array of `DataTypes.RedeemAsset` structs, which specify the output token addresses, minimum output amounts, and the origin vault addresses.
 
-- [IGyroConfig](/igyro-config): Provides access to the global configuration settings.
-- [IReserve](/ireserve): Manages the token deposits and withdrawals for the protocol.
-- [IPAMM](/ipamm): Interacts with the primary AMM pricing mechanism.
-- [IGYDToken](/section-permalink/igyd-token): Handles the minting and burning of the Gyro Dollar (GYD) token.
-- [ISafetyCheck](/isafety-check): Performs safety checks on mint and redeem operations.
+<Callout type="info">
+The `RedeemAsset` struct is defined as follows:
 
-These integrations allow the `IMotherboard` to coordinate the different parts of the Gyroscope protocol and ensure the overall system functions as intended.
+```solidity
+struct RedeemAsset {
+    address outputToken;
+    uint256 minOutputAmount;
+    uint256 valueRatio;
+    address originVault;
+}
+```
+</Callout>
 
-By acting as the central hub for user interactions, the `IMotherboard` contract simplifies the user experience and abstracts away the complexity of the underlying protocol components. This makes the Gyroscope protocol more accessible and user-friendly for developers and end-users alike.
+The Motherboard contract will then calculate the output amounts, withdraw the tokens from the respective vaults, and transfer them to the user. The function returns the actual output amounts.
+
+<Steps>
+### Step 1
+The user calls the `redeem()` function on the Motherboard contract, providing the amount of GYD to redeem and an array of `RedeemAsset` structs.
+
+### Step 2
+The Motherboard contract verifies the input data and performs the following steps:
+1. Calculates the output amounts based on the PAMM contract's logic.
+2. Withdraws the output tokens from the specified vaults.
+3. Transfers the output tokens to the user.
+
+### Step 3
+The Motherboard contract returns the actual output amounts.
+</Steps>
+
+## Dry Run Functions
+
+The Motherboard contract also provides two "dry run" functions, `dryMint()` and `dryRedeem()`, which allow users to simulate the mint and redeem operations without actually executing them. These functions return the expected output amounts and any error messages that would occur if the actual operation were to be performed.
+
+These dry run functions are useful for users to estimate the expected outcome of their actions before committing to them, helping them to manage slippage and avoid unexpected results.
+
+## Integrating with Other Components
+
+The IMotherboard contract serves as the primary entry point for interacting with the Gyroscope protocol. It integrates with other key components, such as the PAMM, Reserve, and GYD token, to provide a seamless user experience.
+
+For example, when a user calls the `mint()` function, the Motherboard contract coordinates the deposit of input tokens into the vaults, the calculation of the GYD amount to mint, and the actual minting of the GYD tokens. This abstraction allows users to interact with the protocol without needing to understand the low-level details of each component.
+
+Overall, the IMotherboard contract is the central hub that enables users to easily mint and redeem GYD tokens, while hiding the complexity of the underlying protocol architecture.

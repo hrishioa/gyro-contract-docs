@@ -2,14 +2,20 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Introduction
 
-The Gyroscope protocol is a decentralized stablecoin ecosystem built on the Ethereum blockchain. It aims to provide a stable, scalable, and efficient medium of exchange for the DeFi ecosystem.
+The Gyroscope protocol is a decentralized stablecoin ecosystem built on the Ethereum blockchain. At its core, Gyroscope provides a primary automated market maker (PAMM) that governs the price and redemption dynamics of the protocol's stablecoin, called GYD.
 
-At the core of the Gyroscope protocol is the **Primary Automated Market Maker (PAMM)**, which is responsible for managing the minting and redemption of the GYD stablecoin. The PAMM uses a novel pricing mechanism to maintain the peg of GYD to the US dollar, while also providing liquidity and price stability.
-
-The Gyroscope protocol also includes a **Reserve** component, which is a collection of vaults that hold the underlying assets backing the GYD stablecoin. These vaults can be of different types, such as Balancer pools or Curve pools, and are managed by the Gyroscope **Motherboard** contract.
+The PAMM is the central pricing mechanism that ensures the GYD token maintains a stable value close to $1 USD. It does this by programmatically adjusting the supply of GYD tokens in response to deposits and withdrawals, according to a set of carefully designed mathematical rules.
 
 <Callout type="info">
-The Gyroscope protocol is designed to be highly flexible and extensible, allowing for the integration of various third-party DeFi protocols and services.
+The PAMM is the key innovation that distinguishes Gyroscope from other decentralized stablecoin protocols, such as DAI or USDC, which rely on over-collateralization and external price oracles.
 </Callout>
 
-To understand the Gyroscope protocol in more detail, let's dive into the [Architecture and Interactions](/architecture-interactions) section, where we'll explore the different components and their interactions.
+In addition to the PAMM, the Gyroscope protocol includes several other important components:
+
+- **Vaults**: These are token pools that hold the underlying assets that back the value of GYD. Users can deposit and withdraw assets from these vaults, which are then used to mint and redeem GYD tokens.
+- **Oracles**: The protocol utilizes a set of price oracles to obtain accurate and up-to-date pricing information for the assets held in the vaults.
+- **Governance**: Gyroscope has a governance system that allows the community to propose and vote on changes to the protocol's parameters and configuration.
+
+Together, these components work to create a decentralized stablecoin that is algorithmically stabilized, rather than relying on over-collateralization or external price feeds.
+
+The rest of this handbook will dive deeper into the [architecture and interactions](/architecture-interactions/high-level-architecture) of the Gyroscope protocol, the [core contracts](/core-contracts/pamm) that power its functionality, the [oracles](/oracles/checked-price-oracle) used for pricing, and the [governance](/governance/governable) system.

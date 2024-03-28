@@ -2,27 +2,32 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # Libraries and Utilities
 
-The Gyroscope protocol relies on a number of utility libraries and helper contracts to provide functionality across the core components. These include:
+The Gyroscope protocol utilizes a number of specialized libraries and utility contracts to support its core functionality. These components provide reusable, well-tested building blocks that enhance the overall robustness and extensibility of the system.
 
 ## EnumerableExtensions
-Provides extensions for working with enumerable sets and arrays, simplifying common operations.
+
+This library provides extensions for working with enumerable sets and arrays, simplifying common operations.
 
 ## Flow
-A library for calculating exponential moving sums, used for tracking vault flow data over time.
+
+The `Flow` library is responsible for calculating exponential moving sums, which are used to track the flow of tokens in and out of the system over time.
 
 ## ConfigHelpers
-Helper functions for interacting with the [IGyroConfig](/igyro-config) contract, which manages the global protocol configuration.
+
+The `ConfigHelpers` contract offers utility functions for interacting with the Gyroscope configuration, making it easier to access and update global protocol settings.
 
 ## LogExpMath
-Implements mathematical functions using logarithms and exponentiation, important for the core pricing mechanics in the [PAMM](/pamm) contract.
+
+The `LogExpMath` library implements mathematical functions using logarithms and exponentiation, which are essential for the primary AMM pricing mechanism.
 
 ## FixedPoint
-Provides fixed-point arithmetic operations, ensuring precision when working with decimal values.
 
-These utility contracts and libraries are used extensively throughout the Gyroscope codebase, providing common functionality that can be easily shared and reused. By encapsulating these low-level operations, the core contracts can focus on their primary responsibilities, resulting in a more modular and maintainable system.
+The `FixedPoint` library provides fixed-point arithmetic operations, ensuring precise calculations and preventing overflow issues.
 
-For example, the [PAMM](/pamm) contract relies heavily on the `LogExpMath` and `FixedPoint` libraries to perform the complex calculations required for the primary AMM pricing mechanism. Without these utilities, the PAMM contract would be significantly more complex and harder to reason about.
+These libraries and utility contracts are essential building blocks that enable the Gyroscope protocol to function reliably and efficiently. By encapsulating common functionality, they promote code reuse, improve maintainability, and reduce the risk of introducing bugs.
 
-Similarly, the [Flow](flow) library allows the protocol to efficiently track vault flow data over time, an important signal used by the [ISafetyCheck](/isafety-check) contract to ensure the safety of mint and redeem operations.
+For example, the `FixedPoint` library is crucial for the primary AMM pricing mechanism, which relies on precise decimal-based calculations. Without this library, the protocol would be more susceptible to rounding errors and other numerical issues, potentially leading to suboptimal pricing or even security vulnerabilities.
 
-By leveraging these libraries and utilities, the Gyroscope protocol is able to maintain a clean and organized codebase, with core functionality separated into well-defined, reusable components. This modular design not only makes the protocol easier to understand and maintain, but also facilitates future extensibility and upgrades.
+Similarly, the `Flow` library simplifies the process of tracking token flows in and out of the system, which is essential for implementing features like the outflow-based redemption mechanism. By providing a standardized way to calculate these values, the `Flow` library ensures consistency and reliability across different parts of the protocol.
+
+Overall, these libraries and utilities play a vital role in the Gyroscope ecosystem, helping to ensure the protocol's stability, scalability, and future extensibility.

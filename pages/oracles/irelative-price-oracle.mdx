@@ -2,50 +2,47 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # IRelativePriceOracle
 
-The `IRelativePriceOracle` is an interface that defines the contract for an oracle that provides relative prices between different asset pairs. This oracle plays a crucial role in the Gyroscope protocol by ensuring that the prices of assets are consistent across the various vaults and the primary AMM.
+The **IRelativePriceOracle** interface is a crucial component of the Gyroscope protocol, responsible for providing relative price information between different assets. This interface allows the Gyroscope protocol to perform necessary price checks and calculations to ensure the stability and security of the system.
 
-The primary responsibility of the `IRelativePriceOracle` is to provide the relative price between two given asset addresses. This relative price is returned as a number with 18 decimal places, representing the number of units of the quote token per unit of the base token.
-
-For example, if the relative price of ETH/USDC is 2000, it means that 1 ETH is worth 2000 USDC.
+The primary function of the **IRelativePriceOracle** is to quote the price of one asset (the "base token") relative to another asset (the "quote token"). This relative price is scaled with 18 decimals, ensuring consistent pricing across the protocol.
 
 <Callout type="info">
-The relative price is always returned with 18 decimal places, regardless of the actual decimal places of the underlying tokens. This ensures consistency and simplifies the price calculations within the protocol.
+The relative price of an asset is the number of units of the quote token per unit of the base token. For example, if the relative price of ETH/USDC is 2000, it means that 1 ETH is worth 2000 USDC.
 </Callout>
 
-## Supported Pairs
+The interface also provides a function to check whether a specific pair of assets is supported by the relative price oracle. This allows the protocol to handle unsupported pairs gracefully, without causing issues during operations.
 
-The `IRelativePriceOracle` interface also defines a method to check if a given pair of asset addresses is supported by the oracle. This is an important feature, as the protocol needs to ensure that it only uses supported asset pairs when performing price-sensitive operations.
+## Functions
 
+The **IRelativePriceOracle** interface defines the following functions:
+
+### `getRelativePrice(address baseToken, address quoteToken) external view returns (uint256)`
+
+This function returns the relative price of the `baseToken` denominated in the `quoteToken`. The returned price is scaled with 18 decimals.
+
+**Example:**
 ```solidity
-function isPairSupported(address baseToken, address quoteToken)
-    external
-    view
-    returns (bool);
+uint256 ethUsdcRelativePrice = relativeOracle.getRelativePrice(address(WETH), address(USDC));
+// ethUsdcRelativePrice might be 2000, meaning 1 ETH = 2000 USDC
 ```
 
-This method returns `true` if the oracle is able to provide a relative price for the given pair of assets, and `false` otherwise.
+### `isPairSupported(address baseToken, address quoteToken) external view returns (bool)`
 
-## Retrieving Relative Prices
+This function returns a boolean indicating whether the relative price oracle supports the provided `baseToken` and `quoteToken` pair.
 
-The main functionality of the `IRelativePriceOracle` is to provide the relative price between two asset addresses. This is done through the following method:
-
+**Example:**
 ```solidity
-function getRelativePrice(address baseToken, address quoteToken)
-    external
-    view
-    returns (uint256);
+bool isEthUsdcSupported = relativeOracle.isPairSupported(address(WETH), address(USDC));
+// isEthUsdcSupported should be true
 ```
 
-This method takes the addresses of the base and quote tokens, and returns the relative price between them as a uint256 value with 18 decimal places.
+## Usage in the Gyroscope Protocol
 
-<Callout type="warning">
-It is crucial that the protocol only uses this interface to retrieve relative prices, and not any other method of price retrieval. This ensures that the entire protocol operates with a consistent and trustworthy set of prices.
-</Callout>
+The **IRelativePriceOracle** interface is used extensively throughout the Gyroscope protocol, particularly in the [CheckedPriceOracle](/oracles/checked-price-oracle) contract. The **CheckedPriceOracle** uses the relative price information to perform various checks on the asset prices, ensuring that the protocol remains stable and secure.
 
-## Integration with Gyroscope
+For example, the **CheckedPriceOracle** uses the relative price information to:
 
-The `IRelativePriceOracle` is a key component of the Gyroscope protocol, as it is used in various parts of the system to ensure price consistency and stability. For example, the [PAMM (PrimaryAMMV1)](/core-contracts/pamm) contract uses the relative prices provided by this oracle to compute the reserve value and to ensure that the prices across different vaults are consistent.
+1. **Ensure Relative Price Consistency**: The oracle checks that the relative price of an asset, as calculated from its USD price, is consistent with the directly queried relative price. This helps detect stale or manipulated prices.
+2. **Compute Robust WETH Price**: The oracle computes a robust estimate of the WETH price by combining the relative price information with signed prices from trusted oracles.
 
-Similarly, the [ISafetyCheck](/core-contracts/isafety-check) contract also relies on the relative prices from this oracle to perform safety checks during the minting and redemption processes.
-
-By using a centralized and trustworthy oracle for relative prices, the Gyroscope protocol can ensure that its operations are based on accurate and up-to-date market information, reducing the risk of price manipulation or inconsistencies.
+By integrating the **IRelativePriceOracle** interface, the Gyroscope protocol can leverage accurate and reliable relative price data, enabling it to function safely and effectively.

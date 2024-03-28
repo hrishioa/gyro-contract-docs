@@ -2,50 +2,94 @@ import { Callout, Steps, Step } from "nextra-theme-docs";
 
 # IGyroConfig
 
-The `IGyroConfig` interface is a crucial component of the Gyroscope protocol, as it stores and manages the global configuration settings for the entire ecosystem. This contract acts as a centralized source of truth for various parameters and addresses that are used across multiple contracts within the protocol.
+The `IGyroConfig` contract is the central point for managing the global configuration of the Gyroscope protocol. It allows the protocol governor to set and update various parameters that are used throughout the system.
 
-The `IGyroConfig` interface provides the following key functionalities:
+## Key Responsibilities
 
-1. **Configuration Management**: It allows the protocol's governance to set, update, and unset various configuration parameters, such as addresses of core contracts, fee rates, and other protocol-wide settings.
-2. **Configuration Freezing**: The interface also enables the freezing of certain configuration parameters, making them immutable and preventing further changes.
-3. **Configuration Querying**: The `IGyroConfig` contract provides functions to retrieve the current values of configuration parameters, as well as check if a specific parameter exists and whether it has been frozen.
+The main responsibilities of the `IGyroConfig` contract are:
 
-## Configuration Parameters
+1. **Storing and Retrieving Configuration Values**: The contract provides functions to set, retrieve, and unset configuration values identified by unique keys.
+2. **Configuration Freezing**: Selected configuration values can be "frozen" to prevent them from being modified in the future, ensuring the integrity of critical parameters.
+3. **Governance Control**: All configuration updates are subject to governance control, ensuring that changes are approved by the protocol's decision-makers.
 
-The configuration parameters managed by the `IGyroConfig` interface include, but are not limited to:
+## Configuration Management
 
-- Addresses of core Gyroscope contracts, such as the [Motherboard](/imotherboard), [Reserve](/ireserve), and [PAMM](/pamm) contracts.
-- Protocol fee rates, such as the flash loan fee and swap fee.
-- Volatility thresholds for asset prices.
-- Parameters related to the vault weight management, such as the maximum allowed deviation from the ideal weight.
-- Addresses of authorized entities, such as the [Oracle Guardian](/oracle-integration) and [Safety Check](/isafety-check) contracts.
+The `IGyroConfig` contract uses a key-value store to manage the protocol's configuration. Each configuration parameter is identified by a unique `bytes32` key, and its value can be either a `uint256` or an `address`. The contract also stores metadata about each configuration parameter, including whether it is frozen and its data type.
 
 <Callout type="info">
-The specific configuration parameters and their usage are documented in the respective sections of this handbook, such as [PAMM](/pamm) and [Oracle Integration](/oracle-integration).
+  The use of `bytes32` keys allows for efficient storage and lookup of
+  configuration parameters, while the metadata provides additional context about
+  each setting.
 </Callout>
 
-## Configuration Interaction
+### Setting and Retrieving Configuration Values
 
-Interactions with the `IGyroConfig` interface are typically performed by the protocol's governance, which has the authority to update the configuration settings. However, other contracts within the Gyroscope ecosystem may also need to access these configuration parameters to perform their respective functions.
+The `IGyroConfig` contract provides the following functions for managing configuration values:
 
-For example, the [Motherboard](/imotherboard) contract may need to retrieve the address of the [Reserve](/ireserve) contract to facilitate the minting and redemption of Gyro Dollars (GYD). Similarly, the [PAMM](/pamm) contract may need to access the volatility thresholds and other parameters related to the primary AMM pricing mechanism.
+- `setUint(bytes32 key, uint256 newValue)`: Sets a `uint256` configuration value for the given key.
+- `setAddress(bytes32 key, address newValue)`: Sets an `address` configuration value for the given key.
+- `getUint(bytes32 key)`: Retrieves the `uint256` value for the given key.
+- `getAddress(bytes32 key)`: Retrieves the `address` value for the given key.
+- `unset(bytes32 key)`: Removes the configuration value for the given key.
 
-The following diagram illustrates the interactions between the `IGyroConfig` interface and other Gyroscope contracts:
+### Freezing Configuration Values
 
-```mermaid
-graph TD
-  IGyroConfig --> Motherboard
-  IGyroConfig --> PAMM
-  IGyroConfig --> OracleGuardian
-  IGyroConfig --> SafetyCheck
-  Motherboard <-- IGyroConfig
-  PAMM <-- IGyroConfig
-  OracleGuardian <-- IGyroConfig
-  SafetyCheck <-- IGyroConfig
+To ensure the stability and integrity of critical protocol parameters, the `IGyroConfig` contract allows the governor to "freeze" configuration values, making them immutable. This is done using the `freeze(bytes32 key)` function.
+
+<Callout type="warning">
+  Once a configuration value is frozen, it cannot be updated or unset, ensuring
+  that the parameter remains fixed for the lifetime of the protocol.
+</Callout>
+
+### Governance Control
+
+All configuration updates in the `IGyroConfig` contract are subject to governance control. This means that only the current governor, as defined by the `IGovernable` interface, can make changes to the protocol's configuration.
+
+The `governanceOnly` modifier is used to restrict access to the configuration management functions, ensuring that only the governor can interact with the contract.
+
+## Events and Monitoring
+
+The `IGyroConfig` contract emits several events to notify external parties of changes to the protocol's configuration:
+
+- `ConfigChanged(bytes32 key, uint256 previousValue, uint256 newValue)`: Emitted when a `uint256` configuration value is changed.
+- `ConfigChanged(bytes32 key, address previousValue, address newValue)`: Emitted when an `address` configuration value is changed.
+- `ConfigUnset(bytes32 key)`: Emitted when a configuration value is unset.
+- `ConfigFrozen(bytes32 key)`: Emitted when a configuration value is frozen.
+
+By monitoring these events, external systems and tools can stay up-to-date with the protocol's configuration and ensure that changes are in line with the expected governance processes.
+
+## Example Usage
+
+Suppose we want to update the `xuBar` parameter, which is a key configuration value used by the primary AMM pricing contract (`PAMM`). We can do this as follows:
+
+<Steps>
+### Step 1
+First, we need to determine the `bytes32` key for the `xuBar` parameter. This can be done by hashing the parameter name using Keccak-256:
+
+```solidity
+bytes32 xuBarKey = keccak256(abi.encodePacked("xuBar"));
 ```
 
-By providing a centralized and well-defined interface for managing protocol-wide configurations, the `IGyroConfig` contract plays a crucial role in ensuring the consistent and coordinated behavior of the Gyroscope ecosystem.
+### Step 2
 
-## Conclusion
+Next, we can use the `setUint` function to update the `xuBar` value:
 
-The `IGyroConfig` interface is a essential component of the Gyroscope protocol, as it allows the protocol's governance to manage the global configuration settings. This contract serves as a source of truth for various parameters and addresses used across multiple contracts within the ecosystem, enabling coordinated and consistent behavior throughout the protocol.
+```solidity
+gyroConfig.setUint(xuBarKey, 0.8e18);
+```
+
+Here, we're setting the `xuBar` parameter to 0.8, which is represented as 0.8 \* 10^18 in the contract's fixed-point representation.
+
+### Step 3
+
+We can also retrieve the current value of `xuBar` using the `getUint` function:
+
+```solidity
+uint256 currentXuBar = gyroConfig.getUint(xuBarKey);
+```
+
+This allows us to check the current configuration and ensure that the update was successful.
+
+</Steps>
+
+By using the `IGyroConfig` contract, protocol developers can easily manage the global configuration of the Gyroscope system, ensuring that critical parameters are properly governed and that changes can be easily monitored.
